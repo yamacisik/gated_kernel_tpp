@@ -75,7 +75,7 @@ def get_dataloader(data, batch_size, shuffle=True):
     ds = EventData(data)
     dl = torch.utils.data.DataLoader(
         ds,
-        num_workers=2,
+        num_workers=0,
         batch_size=batch_size,
         collate_fn=collate_fn,
         shuffle=shuffle

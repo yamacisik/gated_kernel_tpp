@@ -4,6 +4,39 @@ import torch.nn.functional as F
 import math
 
 
+class gated_TPP(nn.Module):
+
+    def __init__(self,
+                 num_types, d_model, t_max=200, dropout=0.1):
+        super().__init__()
+
+        self.d_model = d_model
+        self.num_types = num_types
+        self.encoder = Encoder(num_types, d_model, t_max=t_max)
+        self.norm = nn.LayerNorm(d_model, eps=1e-6)
+        self.decoder = Decoder(num_types, d_model, dropout)
+
+    def forward(self, event_type, event_time):
+        scores, embeddings, _ = self.encoder(event_type, event_time)
+        hidden = torch.matmul(scores, embeddings)
+        hidden = self.norm(hidden)
+
+        return self.decoder(hidden)
+
+    def calculate_loss(self, batch_arrival_times, sampled_arrival_times, batch_types):
+        arrival_times = batch_arrival_times[:, 1:]
+        sampled_times = sampled_arrival_times[:, :-1]
+
+        l1_loss = torch.abs(arrival_times - sampled_times)
+        batch_lengths = (batch_types != 0).sum(-1).to('cpu')  ## Non events are 0
+
+        batch_loss = nn.utils.rnn.pack_padded_sequence(l1_loss.T, batch_lengths - 1, enforce_sorted=False)[0]
+
+        time_loss = batch_loss.sum()
+
+        return time_loss
+
+
 class Encoder(nn.Module):
     """ A encoder model with self attention mechanism. """
 
@@ -13,24 +46,28 @@ class Encoder(nn.Module):
 
         self.d_model = d_model
         self.num_types = num_types
-        self.type_emb = nn.Embedding(num_types + 1, d_model, padding_idx=0)
+        self.type_emb = nn.Embedding(num_types + 1, d_model // 2, padding_idx=0)
         self.position_vec = torch.tensor(
-            [math.pow(10000.0, 2.0 * (i // 2) / d_model) for i in range(d_model)])
+            [math.pow(10000.0, 2.0 * (i // 2) / d_model // 2) for i in range(d_model // 2)])
+
+        # self.type_emb = nn.Embedding(num_types + 1, d_model , padding_idx=0)
+        # self.position_vec = torch.tensor(
+        #     [math.pow(10000.0, 2.0 * (i ) / d_model ) for i in range(d_model)])
         self.kernel = squared_exponential_kernel
-        self.t_max = 200
+        self.t_max = t_max
 
     def forward(self, event_type, event_time):
         """ Encode event sequences via kernel functions """
 
-        ## Temporal Encoding
-        temp_enc = event_time.unsqueeze(-1) / self.position_vec
+        # Temporal Encoding
+        temp_enc = event_time.unsqueeze(-1) / self.position_vec.to(event_time.device)
         temp_enc[:, :, 0::2] = torch.sin(temp_enc[:, :, 0::2])
         temp_enc[:, :, 1::2] = torch.cos(temp_enc[:, :, 1::2])
 
         ## Type Encoding
         type_embedding = self.type_emb(event_type) * math.sqrt(
             self.d_model)  ## Scale the embedding with the hidden vector size
-
+        # embedding = type_embedding
         embedding = torch.cat([temp_enc, type_embedding], dim=-1)
 
         ## Future Masking
@@ -45,52 +82,66 @@ class Encoder(nn.Module):
         scores = (scores * subsequent_mask).masked_fill_(subsequent_mask == 0, value=-1000)
         scores = F.softmax(scores, dim=-1)
 
-        return scores, embedding
+        self.scores = scores
+        self.t_diff = (xt - xt_bar) * self.t_max
+
+        return scores, embedding, self.t_diff
 
 
 class Decoder(nn.Module):
     """ A non parametric decoder. """
 
     def __init__(self,
-                 num_types, d_model):
+                 num_types, d_model, dropout):
         super().__init__()
 
         self.d_model = d_model
         self.num_types = num_types
-        self.GAN =GenerativeAdversarialNetwork()
+        self.GAN = GenerativeAdversarialNetwork(num_types, d_model, dropout)
+
+    def forward(self, hidden):
+        return self.GAN(hidden)
 
 
 class GenerativeAdversarialNetwork(nn.Module):
 
     def __init__(self,
-                 num_types, d_model):
+                 num_types, d_model, dropout):
         super().__init__()
 
         self.d_model = d_model
         self.num_types = num_types
 
+        self.generator = Generator(num_types, d_model, dropout)
+
+    def forward(self, hidden):
+        return self.generator(hidden)
 
 
-
-class gated_TPP(nn.Module):
+class Generator(nn.Module):
 
     def __init__(self,
-                 num_types, d_model, t_max=200):
+                 num_types, d_model, dropout=0.1):
         super().__init__()
 
         self.d_model = d_model
         self.num_types = num_types
-        self.encoder = Encoder(num_types, d_model, t_max=t_max)
 
-    def forward(self, event_type, event_time):
-        scores, embeddings = self.encoder(event_type, event_time)
-        history_vector = torch.matmul(scores, embeddings)
+        self.input_weights = nn.Linear(d_model, d_model, bias=False)
+        self.noise_weights = nn.Linear(d_model, d_model, bias=False)
+        self.event_time_calculator = nn.Linear(d_model, 1, bias=False)
+        self.dropout = nn.Dropout(dropout)
+
+    def forward(self, hidden):
+        b_n, s_n, h_n = hidden.size()
+        noise = torch.rand((b_n, s_n, h_n), device=hidden.device)
+        hidden_sample = torch.relu(self.noise_weights(noise) + self.input_weights(hidden))
+        hidden_sample = self.dropout(hidden_sample)
+
+        return torch.exp(self.event_time_calculator(hidden_sample)).squeeze(-1)
 
 
-        return history_vector
-
-
-def squared_exponential_kernel(x, sigma=10, lambd=0.005, norm=2):
+def squared_exponential_kernel(x, sigma=10, lambd=0.01, norm=2):
     d = torch.abs(x[0] - x[1]) ** norm
 
     return (sigma ** 2) * torch.exp(-(d ** 2) / lambd ** 2)
