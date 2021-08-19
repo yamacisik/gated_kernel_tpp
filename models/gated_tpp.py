@@ -28,6 +28,7 @@ class gated_TPP(nn.Module):
         sampled_times = sampled_arrival_times[:, :-1]
 
         l1_loss = torch.abs(arrival_times - sampled_times)
+
         batch_lengths = (batch_types != 0).sum(-1).to('cpu')  ## Non events are 0
 
         batch_loss = nn.utils.rnn.pack_padded_sequence(l1_loss.T, batch_lengths - 1, enforce_sorted=False)[0]
@@ -46,14 +47,15 @@ class Encoder(nn.Module):
 
         self.d_model = d_model
         self.num_types = num_types
-        self.type_emb = nn.Embedding(num_types + 1, d_model // 2, padding_idx=0)
+        self.type_emb = nn.Embedding(num_types + 1, d_model, padding_idx=0)
         self.position_vec = torch.tensor(
-            [math.pow(10000.0, 2.0 * (i // 2) / d_model // 2) for i in range(d_model // 2)])
+            [math.pow(10000.0, 2.0 * (i) / d_model) for i in range(d_model)])
+        self.sigmoid = SigmoidGate(num_types, d_model)
 
         # self.type_emb = nn.Embedding(num_types + 1, d_model , padding_idx=0)
         # self.position_vec = torch.tensor(
         #     [math.pow(10000.0, 2.0 * (i ) / d_model ) for i in range(d_model)])
-        self.kernel = squared_exponential_kernel
+        self.kernel = squared_exponential_kernel(num_types, d_model)
         self.t_max = t_max
 
     def forward(self, event_type, event_time):
@@ -67,23 +69,27 @@ class Encoder(nn.Module):
         ## Type Encoding
         type_embedding = self.type_emb(event_type) * math.sqrt(
             self.d_model)  ## Scale the embedding with the hidden vector size
-        # embedding = type_embedding
-        embedding = torch.cat([temp_enc, type_embedding], dim=-1)
+        embedding = temp_enc
+        # embedding = torch.cat([temp_enc, type_embedding], dim=-1)
 
         ## Future Masking
         subsequent_mask = get_subsequent_mask(event_type)
 
         ## Time Scores
-        normalized_event_time = event_time / self.t_max
+        normalized_event_time = event_time
         xt_bar = normalized_event_time.unsqueeze(1). \
             expand(normalized_event_time.size(0), normalized_event_time.size(1), normalized_event_time.size(1))
         xt = xt_bar.transpose(1, 2)
-        scores = self.kernel((xt, xt_bar))
-        scores = (scores * subsequent_mask).masked_fill_(subsequent_mask == 0, value=-1000)
-        scores = F.softmax(scores, dim=-1)
+
+        scores = self.kernel((xt, xt_bar)) * self.sigmoid((xt, xt_bar), (xt, xt_bar))
+        # scores = self.kernel((xt, xt_bar))
+
+        scores = (scores * subsequent_mask).masked_fill_(subsequent_mask == 0, value=0)
+        # scores = scores.masked_fill(scores ==0,value = -1000)
+        # scores = F.softmax(scores, dim=-1)
 
         self.scores = scores
-        self.t_diff = (xt - xt_bar) * self.t_max
+        self.t_diff = (xt - xt_bar)
 
         return scores, embedding, self.t_diff
 
@@ -129,7 +135,8 @@ class Generator(nn.Module):
 
         self.input_weights = nn.Linear(d_model, d_model, bias=False)
         self.noise_weights = nn.Linear(d_model, d_model, bias=False)
-        self.event_time_calculator = nn.Linear(d_model, 1, bias=False)
+        self.event_time_calculator = nn.Linear(d_model, 1, bias=True)
+
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, hidden):
@@ -138,13 +145,7 @@ class Generator(nn.Module):
         hidden_sample = torch.relu(self.noise_weights(noise) + self.input_weights(hidden))
         hidden_sample = self.dropout(hidden_sample)
 
-        return torch.exp(self.event_time_calculator(hidden_sample)).squeeze(-1)
-
-
-def squared_exponential_kernel(x, sigma=10, lambd=0.01, norm=2):
-    d = torch.abs(x[0] - x[1]) ** norm
-
-    return (sigma ** 2) * torch.exp(-(d ** 2) / lambd ** 2)
+        return nn.functional.softplus(self.event_time_calculator(hidden_sample)).squeeze(-1)
 
 
 def get_non_pad_mask(seq):
@@ -173,3 +174,74 @@ def get_subsequent_mask(seq):
     subsequent_mask = subsequent_mask.unsqueeze(0).expand(sz_b, -1, -1)  # b x ls x ls
     subsequent_mask = (subsequent_mask - 1) ** 2
     return subsequent_mask
+
+
+class SigmoidGate(nn.Module):
+
+    def __init__(self,
+                 num_types, d_model, t_max=200):
+        super().__init__()
+
+        self.d_model = d_model
+        self.num_types = num_types
+        self.t_max = t_max
+        if num_types == 1:
+            self.params = nn.Parameter(torch.tensor([0.1, 0.1]), requires_grad=True)
+
+        else:
+            self.params = nn.Linear(d_model * 2, 2)
+
+    def forward(self, x, type_emb=None, norm=1):
+
+        d = torch.abs((x[0] - x[1]) / self.t_max) ** norm
+
+        if self.num_types == 1:
+            l, s = torch.sigmoid(self.params)[0], torch.sigmoid(self.params)[1]
+
+
+
+            return 1 + torch.tanh((d - l) / s)
+
+        else:
+            l, s = self.params(type_emb[0], type_emb[1])
+            return 1 + torch.tanh((d - l) / s)
+
+    def get_params(self):
+
+        l, s = torch.sigmoid(self.params)[0], torch.sigmoid(self.params)[1]
+        return l, s
+
+
+class squared_exponential_kernel(nn.Module):
+
+    def __init__(self,
+                 num_types, d_model, sigma=1, norm=1):
+        super().__init__()
+
+        self.d_model = d_model
+        self.num_types = num_types
+        self.norm = norm
+        self.sigma = 1
+        if num_types == 1:  ## Params Sigma, Lambda and Norm
+            self.length_scale = nn.Parameter(torch.tensor(1.0), requires_grad=True)
+        else:
+            self.length_scale = nn.Sequential(nn.Linear(d_model * 2, 1), nn.Softplus())
+
+    def forward(self, x, type_emb=None):
+
+        d = torch.abs(x[0] - x[1]) ** self.norm
+        length_scale = nn.functional.softplus(self.length_scale)
+        if self.num_types == 1:
+            return (self.sigma ** 2) * torch.exp(-(d ** 2) / length_scale ** 2)
+        else:
+            ## CONCAT TYPES
+            return (self.sigma ** 2) * torch.exp(-(d ** 2) / self.length_scale(type_emb) ** 2)
+
+    def get_params(self):
+
+        if self.num_types == 1:
+            length_scale = nn.functional.softplus(self.length_scale)
+        else:
+            pass
+
+        return {'length_scale': length_scale, 'sigma': self.sigma, 'Norm-P': self.norm}
