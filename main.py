@@ -22,8 +22,6 @@ from tqdm import tqdm
 import random
 from models.gated_tpp import gated_TPP
 import torch.nn.functional as F
-import seaborn as sns
-import matplotlib.pyplot as plt
 
 parser = argparse.ArgumentParser()
 
