@@ -7,6 +7,7 @@ import torch.nn as nn
 import torch.optim as optim
 from datetime import datetime
 import csv
+import math
 
 model_name = str(datetime.now())[:19].replace(':', '_').replace(' ', '_').replace('-', '_')
 
@@ -26,16 +27,15 @@ import torch.nn.functional as F
 parser = argparse.ArgumentParser()
 
 parser.add_argument('-data', required=True, default='power_hawkes')
-
-parser.add_argument('-epoch', type=int, default=50)
-parser.add_argument('-batch_size', type=int, default=4)
+parser.add_argument('-epoch', type=int, default=10)
+parser.add_argument('-batch_size', type=int, default=1)
 parser.add_argument('-d_model', type=int, default=32)
 
 parser.add_argument('-n_head', type=int, default=4)
 parser.add_argument('-n_layers', type=int, default=4)
 
 parser.add_argument('-dropout', type=float, default=0.1)
-parser.add_argument('-lr', type=float, default=0.005)
+parser.add_argument('-lr', type=float, default=0.0001)
 parser.add_argument('-l2', type=float, default=0.0001)
 parser.add_argument('-seed', type=int, default=42)
 parser.add_argument('-save', type=bool, default=True)
@@ -89,6 +89,9 @@ optimizer = optim.Adam(filter(lambda x: x.requires_grad, model.parameters()),
                        params.lr, betas=(0.9, 0.999), eps=1e-05)
 
 model = model.to(device)
+# torch.nn.init.xavier_uniform_(model.encoder.kernel.length_scale[0].weight)
+# torch.nn.init.xavier_uniform_(model.encoder.sigmoid.params[0].weight)
+
 
 for epoch in range(params.epoch):
     train_epoch_loss = 0
@@ -163,8 +166,16 @@ for epoch in range(params.epoch):
 print(f' Valid Last Event RMSE:{val_RMSE:.4f}, Test Last Event RMSE:{test_RMSE:.4f}')
 print(f' Valid All Event RMSE:{val_all_RMSE:.4f}, Test All Event RMSE:{test_all_RMSE:.4f}')
 
+type_emb=model.encoder.type_emb.weight* math.sqrt(model.d_model)
+length_scale  =model.encoder.kernel.length_scale(type_emb)[-1]
+s,l = model.encoder.sigmoid.params(model.encoder.type_emb.weight)[-1]
+print(f'Length Scale: {length_scale.item():.4f}, Gate Param s: {s:.4f}, Gate Param l: {l:.4f}')
+
+
 results_to_record = [str(params.data),str(params.epoch), str(params.batch_size), str(params.d_model), str(params.lr),
-                     str(valid_loss.item()),str(test_loss.item()),str(val_all_RMSE.item()),str(test_all_RMSE.item())]
+                     str(valid_loss.item()),str(test_loss.item()),str(val_all_RMSE.item()),str(test_all_RMSE.item()),
+                     str(length_scale),str(s),str(l)]
+
 with open(r'results.csv', 'a', newline='') as f:
     writer = csv.writer(f)
     writer.writerow(results_to_record)
