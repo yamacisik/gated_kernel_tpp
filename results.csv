@@ -1,1 +1,1 @@
-Dataset,Epochs,Batch Size,D_Model,Learning Rate,Val Loss,Test Loss,Val RMSE,Test RMSE,LengthScale,S,L
+Dataset,Epochs,Batch Size,D_Model,D_Type,Learning Rate,Beta,Val Loss,Test Loss,Val RMSE,Test RMSE,LengthScale,Alpha,Normalized,Regularizer Param

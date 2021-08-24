@@ -1,11 +1,15 @@
 #!/bin/bash
 
-for lr in 0.0001 0.0005 0.001
-  do
-  for d_model in 32 16
-  do
-  python main.py -data power_hawkes -d_model $d_model -batch 40 -lr $lr -epoch 250
-  python main.py -data power_hawkes -d_model $d_model -batch 4 -lr $lr -epoch 50
 
+for d_model in 64 128
+do
+for param_reg in 1 2 5 10 20
+do
+for d_type in 4 8
+do
+python main.py -d_model $d_model -d_type $d_type -batch 40 -lr 0.0001 -epoch 500 -param_reg $param_reg -normalized False
+python main.py -d_model $d_model -d_type $d_type -batch 40 -lr 0.0001 -epoch 500 -param_reg $param_reg -normalized True
+
+done
 done
 done

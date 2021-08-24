@@ -26,19 +26,20 @@ import torch.nn.functional as F
 
 parser = argparse.ArgumentParser()
 
-parser.add_argument('-data', required=True, default='power_hawkes')
-parser.add_argument('-epoch', type=int, default=10)
-parser.add_argument('-batch_size', type=int, default=1)
+parser.add_argument('-data', type=str, default='power_hawkes')
+parser.add_argument('-epoch', type=int, default=2)
+parser.add_argument('-batch_size', type=int, default=40)
 parser.add_argument('-d_model', type=int, default=32)
-
-parser.add_argument('-n_head', type=int, default=4)
-parser.add_argument('-n_layers', type=int, default=4)
+parser.add_argument('-d_type', type=int, default=8)
+parser.add_argument('-beta', type=float, default=1.0)
+parser.add_argument('-param_reg', type=float, default=1.0)
 
 parser.add_argument('-dropout', type=float, default=0.1)
-parser.add_argument('-lr', type=float, default=0.0001)
+parser.add_argument('-lr', type=float, default=0.0005)
 parser.add_argument('-l2', type=float, default=0.0001)
 parser.add_argument('-seed', type=int, default=42)
 parser.add_argument('-save', type=bool, default=True)
+parser.add_argument('-normalized', type=bool, default=False)
 
 params = parser.parse_args()
 
@@ -84,12 +85,18 @@ testloader = get_dataloader(test_data, 1, shuffle=False)  # 1 makes it easy to c
 valloader = get_dataloader(dev_data, 1, shuffle=False)
 
 t_max = max([seq[-1]['time_since_start'] for data in [train_data, dev_data, test_data] for seq in data])
-model = gated_TPP(num_types, params.d_model, t_max=t_max, dropout=params.dropout)  #
+if not params.normalized:
+    t_max = 1
+
+model = gated_TPP(num_types, params.d_model, params.d_type, t_max=t_max, dropout=params.dropout, beta=params.beta)  #
 optimizer = optim.Adam(filter(lambda x: x.requires_grad, model.parameters()),
-                       params.lr, betas=(0.9, 0.999), eps=1e-05)
+                       params.lr, betas=(0.9, 0.999), eps=1e-05, weight_decay=params.l2)
 
 model = model.to(device)
-# torch.nn.init.xavier_uniform_(model.encoder.kernel.length_scale[0].weight)
+# torch.nn.init.xavier_uniform_(model.encoder.kernel.length_scale[0].param.weight)
+
+torch.nn.init.xavier_uniform_(model.encoder.kernel.lengthscale[0].weight)
+# torch.nn.init.xavier_uniform_(model.encoder.kernel.alpha[0].weight)
 # torch.nn.init.xavier_uniform_(model.encoder.sigmoid.params[0].weight)
 
 
@@ -103,7 +110,7 @@ for epoch in range(params.epoch):
 
         predicted_times = model(event_type, event_time)
 
-        batch_loss = model.calculate_loss(arrival_time, predicted_times, event_type)
+        batch_loss = model.calculate_loss(arrival_time, predicted_times, event_type, reg_param=params.param_reg)
         train_epoch_loss += batch_loss
         train_events += ((event_type != 0).sum(-1) - 1).sum()
 
@@ -163,23 +170,39 @@ for epoch in range(params.epoch):
 
     print(f'Epoch:{epoch}, Train Loss:{train_loss:.4f}, Valid Loss:{valid_loss:.4f}, Test Loss:{test_loss:.4f}')
 
+    type_emb = model.encoder.type_emb.weight * math.sqrt(model.d_model)
+    lengthscale = model.encoder.kernel.lengthscale(type_emb)[-1]
+    # alpha  =model.encoder.kernel.alpha(type_emb)[-1]
+    # print(f'Alpha: {alpha.item():.4f}, Length Scale: {lengthscale.item():.4f}')
+    print(f'Length Scale: {lengthscale.item():.4f}')
+    alpha = 'NAN'
+
 print(f' Valid Last Event RMSE:{val_RMSE:.4f}, Test Last Event RMSE:{test_RMSE:.4f}')
 print(f' Valid All Event RMSE:{val_all_RMSE:.4f}, Test All Event RMSE:{test_all_RMSE:.4f}')
 
-type_emb=model.encoder.type_emb.weight* math.sqrt(model.d_model)
-length_scale  =model.encoder.kernel.length_scale(type_emb)[-1]
-s,l = model.encoder.sigmoid.params(model.encoder.type_emb.weight)[-1]
-print(f'Length Scale: {length_scale.item():.4f}, Gate Param s: {s:.4f}, Gate Param l: {l:.4f}')
+# type_emb=model.encoder.type_emb.weight* math.sqrt(model.d_model)
+# lengthscale  =model.encoder.kernel.lengthscale(type_emb)[-1]
 
+# alpha  =model.encoder.kernel.alpha(type_emb)[-1]
 
-results_to_record = [str(params.data),str(params.epoch), str(params.batch_size), str(params.d_model), str(params.lr),
-                     str(valid_loss.item()),str(test_loss.item()),str(val_all_RMSE.item()),str(test_all_RMSE.item()),
-                     str(length_scale),str(s),str(l)]
+# s,l = model.encoder.sigmoid.params(model.encoder.type_emb.weight)[-1]
+# alpha,lengthscale = model.encoder.kernel.params(model.encoder.type_emb.weight)[-1]
+
+# print(f'Length Scale: {length_scale.item():.4f}, Gate Param s: {s:.4f}, Gate Param l: {l:.4f}')
+# print(f'Alpha: {alpha.item():.4f}, Length Scale: {lengthscale.item():.4f}, Gate Param s: {s:.4f}, Gate Param l: {l:.4f}')
+
+# print(f'Alpha: {alpha.item():.4f}, Length Scale: {lengthscale.item():.4f}')
+# print(f'Length Scale: {lengthscale.item():.4f}')
+
+results_to_record = [str(params.data), str(params.epoch), str(params.batch_size), str(params.d_model),
+                     str(params.d_type),str(params.lr), str(params.beta), str(valid_loss.item()), str(test_loss.item()),
+                     str(val_all_RMSE.item()), str(test_all_RMSE.item()), str(lengthscale.item()), str(alpha),
+                     str(params.normalized),str(params.param_reg)]
 
 with open(r'results.csv', 'a', newline='') as f:
     writer = csv.writer(f)
     writer.writerow(results_to_record)
 
-model_name = params.data +'debug_model'
+model_name = params.data + 'debug_model'
 if params.save:
     torch.save(model.state_dict(), 'trained_models/' + model_name + '.pt')

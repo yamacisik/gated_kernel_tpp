@@ -7,12 +7,13 @@ import math
 class gated_TPP(nn.Module):
 
     def __init__(self,
-                 num_types, d_model, t_max=200, dropout=0.1):
+                 num_types, d_model, d_type=1, t_max=200, dropout=0.1, beta=1.0):
         super().__init__()
 
         self.d_model = d_model
+        self.d_type = d_type
         self.num_types = num_types
-        self.encoder = Encoder(num_types, d_model, t_max=t_max)
+        self.encoder = Encoder(num_types, d_model, d_type, t_max=t_max, beta=beta)
         self.norm = nn.LayerNorm(d_model, eps=1e-6)
         self.decoder = Decoder(num_types, d_model, dropout)
 
@@ -23,7 +24,7 @@ class gated_TPP(nn.Module):
 
         return self.decoder(hidden)
 
-    def calculate_loss(self, batch_arrival_times, sampled_arrival_times, batch_types):
+    def calculate_loss(self, batch_arrival_times, sampled_arrival_times, batch_types, reg_param=1.0):
         arrival_times = batch_arrival_times[:, 1:]
         sampled_times = sampled_arrival_times[:, :-1]
 
@@ -37,24 +38,33 @@ class gated_TPP(nn.Module):
 
         ## Add Param Regularizer 1-D
         types = self.encoder.type_emb.weight * math.sqrt(self.d_model)
-        param_size = torch.abs(self.encoder.kernel.length_scale(types)[-1][-1]).sum()
-        return time_loss
+        param_size = torch.abs(self.encoder.kernel.lengthscale(types)[-1][-1]).sum()
+        # param_size +=torch.abs(self.encoder.kernel.alpha(types)[-1][-1]).sum()
+        # s, l = self.encoder.sigmoid.params(self.encoder.type_emb.weight)[-1]
+        # param_size =torch.abs(s).sum() +torch.abs(l).sum()
+
+        loss = time_loss + reg_param * param_size
+        # loss = time_loss
+
+        return loss
 
 
 class Encoder(nn.Module):
     """ A encoder model with self attention mechanism. """
 
     def __init__(self,
-                 num_types, d_model, t_max=200):
+                 num_types, d_model, d_type=1, t_max=200, beta=5.0):
         super().__init__()
 
         self.d_model = d_model
+        self_d_type = d_type
         self.num_types = num_types
-        self.type_emb = nn.Embedding(num_types + 1, d_model, padding_idx=0)
+
+        self.type_emb = nn.Embedding(num_types + 1, d_type, padding_idx=0)
         self.position_vec = torch.tensor(
             [math.pow(10000.0, 2.0 * (i) / d_model) for i in range(d_model)])
-        self.sigmoid = SigmoidGate(num_types, d_model, norm=1)
-        self.kernel = squared_exponential_kernel(num_types, d_model, norm=1)
+        self.sigmoid = SigmoidGate(num_types, d_type, norm=1, t_max=t_max)
+        self.kernel = squared_exponential_kernel(num_types, d_type, norm=1, t_max=t_max, beta=beta)
         self.t_max = t_max
 
     def forward(self, event_type, event_time):
@@ -85,9 +95,9 @@ class Encoder(nn.Module):
             0), type_embedding.size(1), type_embedding.size(1), type_embedding.size(-1))
         xd = xd_bar.transpose(1, 2)
 
-        scores = self.kernel((xt, xt_bar), (xd, xd_bar)) * (self.sigmoid((xt, xt_bar), (xd, xd_bar)))
+        # scores = self.kernel((xt, xt_bar), (xd, xd_bar)) * (self.sigmoid((xt, xt_bar), (xd, xd_bar)))
 
-        # scores = self.kernel((xt, xt_bar), (xd, xd_bar))
+        scores = self.kernel((xt, xt_bar), (xd, xd_bar))
 
         scores = scores.masked_fill_(subsequent_mask == 0, value=-1e10)
         # scores = scores.masked_fill(scores == 0, value=-1000)
@@ -183,25 +193,24 @@ def get_subsequent_mask(seq):
 
 class SigmoidGate(nn.Module):
 
-    def __init__(self,
-                 num_types, d_model, t_max=200, norm=1):
+    def __init__(self, num_types, d_type, norm=1, t_max=200, ):
         super().__init__()
 
-        self.d_model = d_model
+        self.d_model = d_type
         self.num_types = num_types
         self.t_max = t_max
         self.norm = 1
         self.scores = None
         if num_types == 1:
-            # self.params = nn.Parameter(torch.tensor([0.1, 0.1]), requires_grad=True)
-            self.params = nn.Sequential(nn.Linear(d_model, 2, bias=True), nn.Sigmoid())
+            self.params = nn.Sequential(nn.Linear(d_type, 2, bias=False), nn.Sigmoid())
 
         else:
-            self.params = nn.Sequential(nn.Linear(d_model * 2, 2, bias=True), nn.Sigmoid())
+            self.params = nn.Sequential(nn.Linear(d_type * 2, 2, bias=False), nn.Sigmoid())
 
     def forward(self, x, type_emb):
 
-        d = (torch.abs(x[0] - x[1]) / self.t_max) ** self.norm
+        # d = (torch.abs(x[0] - x[1]) / self.t_max) ** self.norm
+        d = (torch.abs(x[0] - x[1])) ** self.norm
 
         if self.num_types == 1:
             space = type_emb[0]
@@ -223,15 +232,16 @@ class SigmoidGate(nn.Module):
 class squared_exponential_kernel(nn.Module):
 
     def __init__(self,
-                 num_types, d_model, sigma=1, norm=1):
+                 num_types, d_type, sigma=1, norm=1, t_max=200, beta=2.0):
         super().__init__()
 
-        self.d_model = d_model
+        self.d_type = d_type
         self.num_types = num_types
         self.norm = norm
         self.sigma = sigma
         self.param_loss = 0
         self.scores = None
+        self.t_max = t_max
         """
         If the model is 1-D we still need the type embedding as an input and train a linear layer followed by softplus
         to make sure the length_scale parameter is positive. Adding a parameter followed by a sigmoid creates a non leaf
@@ -239,14 +249,13 @@ class squared_exponential_kernel(nn.Module):
         """
 
         if num_types == 1:
-            self.length_scale = nn.Sequential(clipper(d_model, 1, lower_limit=None, upper_limit=10),
-                                              nn.Softplus(beta = 0.2))
+            self.lengthscale = nn.Sequential(nn.Linear(d_type, 1, bias=False), nn.Softplus(beta=beta))
         else:
-            self.length_scale = nn.Sequential(clipper(d_model * 2, lower_limit=None, upper_limit=10), nn.Softplus())
+            self.lengthscale = nn.Sequential(clipper(d_type * 2, 1, lower_limit=None, upper_limit=10), nn.Softplus())
 
     def forward(self, x, type_emb):
 
-        d = torch.abs(x[0] - x[1]) ** self.norm
+        d = (torch.abs(x[0] - x[1]) / self.t_max) ** self.norm
         # # length_scale = nn.functional.softplus(self.length_scale)
         # length_scale = self.length_scale
 
@@ -256,10 +265,12 @@ class squared_exponential_kernel(nn.Module):
         else:
             space = torch.cat(type_emb[0], type_emb[1], -1)
 
-        self.scores = (self.sigma ** 2) * torch.exp(-(d ** 2) / self.length_scale(space).squeeze(-1) ** 2)
+        self.scores = (self.sigma ** 2) * torch.exp(-(d ** 2) / self.lengthscale(space).squeeze(-1) ** 2)
+        # self.scores = (self.sigma ** 2) * torch.exp(-(d ** 2) /0.1 ** 2)
+
         return self.scores
 
-    def get_params(self, type_embeddings):
+    def get_param_loss(self, type_embeddings):
 
         if self.num_types == 1:
             # length_scale = nn.functional.softplus(self.length_scale)
@@ -284,3 +295,68 @@ class clipper(nn.Module):
         # return self.param(input).clamp(min=None, max = 20)
 
         return self.param(input)
+
+
+class rational_quadratic_kernel(nn.Module):
+
+    def __init__(self,
+                 num_types, d_type, sigma=1, norm=1, t_max=200):
+        super().__init__()
+
+        self.d_type = d_type
+        self.num_types = num_types
+        self.norm = norm
+        self.sigma = sigma
+        self.param_loss = 0
+        self.scores = None
+        self.t_max = t_max
+        """
+        If the model is 1-D we still need the type embedding as an input and train a linear layer followed by softplus
+        to make sure the length_scale parameter is positive. Adding a parameter followed by a sigmoid creates a non leaf
+        tensor and there for doesn't work.
+        """
+
+        if num_types == 1:
+            # self.params = nn.Sequential(clipper(d_model, 2, lower_limit=None, upper_limit=10),
+            #                             nn.Softplus(beta=2.0))
+
+            self.lengthscale = nn.Sequential(nn.Linear(d_type, 1, bias=False), nn.Softplus())
+            self.alpha = nn.Sequential(nn.Linear(d_type, 1, bias=False), nn.Sigmoid())
+
+
+
+
+        else:
+            self.params = nn.Sequential(clipper(d_type * 2, 2, lower_limit=None, upper_limit=10), nn.Softplus())
+
+    def forward(self, x, type_emb):
+
+        d = (torch.abs(x[0] - x[1]) / self.t_max) ** self.norm
+
+        if self.num_types == 1:
+            space = type_emb[0]
+            # params = self.params(space)
+
+            # alpha = params[:, :, :, :1].squeeze()
+            # lengthscale = params[:, :, :, 1:].squeeze()
+
+            alpha = self.alpha(space).squeeze()
+            lengthscale = self.lengthscale(space).squeeze()
+
+        else:
+            space = torch.cat(type_emb[0], type_emb[1], -1).squeeze()
+
+        self.scores = (self.sigma ** 2) * (1 + (d ** 2) / (alpha * lengthscale ** 2)) ** (-alpha)
+
+        return self.scores
+
+    def get_params(self, type_embeddings):
+
+        if self.num_types == 1:
+            # length_scale = nn.functional.softplus(self.length_scale)
+            length_scale = self.length_scale
+
+        else:
+            pass
+
+        return {'length_scale': length_scale, 'sigma': self.sigma, 'Norm-P': self.norm}
