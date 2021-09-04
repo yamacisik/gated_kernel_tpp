@@ -18,31 +18,40 @@ DATASET_PATHS = {'sin_hawkes': '../data/simulated/sin_hawkes/', 'power_hawkes': 
 DATASET_EVENT_TYPES = {'sin_hawkes': 1, 'power_hawkes': 1, '2_d_hawkes': 2, 'mimic2': 75, 'stackOverflow': 22,
                        'retweet': 3}
 
+KERNEL_TYPES = {1: 'squared_exponential', 2: 'rational_quadratic'}
+MODELS = {1: 'gated_TPP', 2: 'LogNormMix'}
+
 from dataset import get_dataloader
 from tqdm import tqdm
 import random
-from models.gated_tpp import gated_TPP
+from models.gated_tpp import gated_tpp
 import torch.nn.functional as F
 
 parser = argparse.ArgumentParser()
 
 parser.add_argument('-data', type=str, default='power_hawkes')
-parser.add_argument('-epoch', type=int, default=2)
-parser.add_argument('-batch_size', type=int, default=40)
-parser.add_argument('-d_model', type=int, default=32)
+parser.add_argument('-model', type=int, default=1)
+parser.add_argument('-epoch', type=int, default=100)
+parser.add_argument('-batch_size', type=int, default=20)
+parser.add_argument('-d_model', type=int, default=22)
 parser.add_argument('-d_type', type=int, default=8)
-parser.add_argument('-beta', type=float, default=1.0)
-parser.add_argument('-param_reg', type=float, default=1.0)
+parser.add_argument('-alpha', type=float, default=1.0)
+parser.add_argument('-length_scale', type=float, default=1.0)
+parser.add_argument('-reg_param', type=float, default=0.0)
+parser.add_argument('-kernel_type', type=int, default=1)
 
 parser.add_argument('-dropout', type=float, default=0.1)
-parser.add_argument('-lr', type=float, default=0.0005)
+parser.add_argument('-lr', type=float, default=0.0001)
 parser.add_argument('-l2', type=float, default=0.0001)
 parser.add_argument('-seed', type=int, default=42)
 parser.add_argument('-save', type=bool, default=True)
-parser.add_argument('-normalized', type=bool, default=False)
+parser.add_argument('-normalized', type=int, default=0)
+parser.add_argument('-softmax', type=int, default=0)
 
 params = parser.parse_args()
 
+params.normalized = True if params.normalized == 1 else False
+params.softmax = True if params.softmax == 1 else False
 # ------Reproducibility-------
 
 torch.manual_seed(params.seed)
@@ -86,118 +95,60 @@ valloader = get_dataloader(dev_data, 1, shuffle=False)
 
 t_max = max([seq[-1]['time_since_start'] for data in [train_data, dev_data, test_data] for seq in data])
 if not params.normalized:
+    'Arrival Times are not normalized...'
     t_max = 1
 
-model = gated_TPP(num_types, params.d_model, params.d_type, t_max=t_max, dropout=params.dropout, beta=params.beta)  #
+print(t_max)
+model = gated_tpp(num_types, params.d_model, params.d_type, t_max=t_max, dropout=params.dropout,
+                  length_scale=params.length_scale,
+                  kernel_type=KERNEL_TYPES[params.kernel_type], alpha=params.alpha, softmax=params.softmax)
+#
 optimizer = optim.Adam(filter(lambda x: x.requires_grad, model.parameters()),
                        params.lr, betas=(0.9, 0.999), eps=1e-05, weight_decay=params.l2)
 
 model = model.to(device)
-# torch.nn.init.xavier_uniform_(model.encoder.kernel.length_scale[0].param.weight)
+for p in model.parameters():
+    if p.dim() > 1:
+        nn.init.xavier_uniform_(p)
 
-torch.nn.init.xavier_uniform_(model.encoder.kernel.lengthscale[0].weight)
-# torch.nn.init.xavier_uniform_(model.encoder.kernel.alpha[0].weight)
-# torch.nn.init.xavier_uniform_(model.encoder.sigmoid.params[0].weight)
-
+# with open('log.txt', 'w') as f:
+#     f.write('Epoch, Loss, RMSE_ALL, RMSE_LAST, Lengthscale\n')
 
 for epoch in range(params.epoch):
-    train_epoch_loss = 0
-    train_events = 0
-    for batch in trainloader:
-        optimizer.zero_grad()
-
-        event_time, arrival_time, event_type, _ = map(lambda x: x.to(params.device), batch)
-
-        predicted_times = model(event_type, event_time)
-
-        batch_loss = model.calculate_loss(arrival_time, predicted_times, event_type, reg_param=params.param_reg)
-        train_epoch_loss += batch_loss
-        train_events += ((event_type != 0).sum(-1) - 1).sum()
-
-        batch_loss.backward()
-        optimizer.step()
-
-    val_epoch_loss = 0
-    val_events = 0
-    test_epoch_loss = 0
-    test_events = 0
-    with torch.no_grad():
-        val_last_errors = []
-        val_all_errors = []
-        for batch in valloader:
-            event_time, arrival_time, event_type, _ = map(lambda x: x.to(params.device), batch)
-            predicted_times = model(event_type, event_time)
-            batch_loss = model.calculate_loss(arrival_time, predicted_times, event_type)
-            val_epoch_loss += batch_loss
-            val_events += ((event_type != 0).sum(-1) - 1).sum()
-
-            last_event_index = event_type.sum(-1) - 2
-            errors = predicted_times[:, :-1] - arrival_time[:, 1:]
-            seq_index = 0
-            for idx in last_event_index:
-                val_last_errors.append(errors[seq_index][idx].unsqueeze(-1))
-                val_all_errors.append(errors[seq_index][:idx + 1])
-        val_last_errors = torch.cat(val_last_errors)
-        val_RMSE = (val_last_errors ** 2).mean().sqrt()
-        val_all_errors = torch.cat(val_all_errors)
-        val_all_RMSE = (val_all_errors ** 2).mean().sqrt()
-
-        test_last_errors = []
-        test_all_errors = []
-        for batch in testloader:
-
-            event_time, arrival_time, event_type, _ = map(lambda x: x.to(params.device), batch)
-            predicted_times = model(event_type, event_time)
-            batch_loss = model.calculate_loss(arrival_time, predicted_times, event_type)
-            test_epoch_loss += batch_loss
-            test_events += ((event_type != 0).sum(-1) - 1).sum()
-
-            last_event_index = event_type.sum(-1) - 2
-            errors = predicted_times[:, :-1] - arrival_time[:, 1:]
-            seq_index = 0
-            for idx in last_event_index:
-                test_last_errors.append(errors[seq_index][idx].unsqueeze(-1))
-                test_all_errors.append(errors[seq_index][:idx + 1])
-
-        test_last_errors = torch.cat(test_last_errors)
-        test_RMSE = (test_last_errors ** 2).mean().sqrt()
-        test_all_errors = torch.cat(test_all_errors)
-        test_all_RMSE = (test_all_errors ** 2).mean().sqrt()
+    train_epoch_loss, train_events = model.train_epoch(trainloader, optimizer, params)
+    valid_epoch_loss, valid_events, val_RMSE, val_all_RMSE = model.validate_epoch(valloader, device = params.device,reg_param=params.reg_param)
+    test_epoch_loss, test_events, test_RMSE, test_all_RMSE = model.validate_epoch(testloader, device = params.device,reg_param=params.reg_param)
 
     train_loss = train_epoch_loss / train_events
-    valid_loss = val_epoch_loss / val_events
+    valid_loss = valid_epoch_loss / valid_events
     test_loss = test_epoch_loss / test_events
 
-    print(f'Epoch:{epoch}, Train Loss:{train_loss:.4f}, Valid Loss:{valid_loss:.4f}, Test Loss:{test_loss:.4f}')
+    # type_emb = model.encoder.type_emb.weight * math.sqrt(model.d_model)
+    # length_scale = model.encoder.kernel.params(type_emb)[0]['length_scale']
+    # with open('log.txt', 'a') as f:
+    #     f.write('{epoch}, {loss: 8.5f}, {rmse_all: 8.5f}, {rmse_last: 8.5f}, {length_scale: 8.5f}\n'
+    #             .format(epoch=epoch, loss=valid_loss, rmse_all=val_RMSE, rmse_last=val_RMSE,length_scale =length_scale ))
 
-    type_emb = model.encoder.type_emb.weight * math.sqrt(model.d_model)
-    lengthscale = model.encoder.kernel.lengthscale(type_emb)[-1]
-    # alpha  =model.encoder.kernel.alpha(type_emb)[-1]
-    # print(f'Alpha: {alpha.item():.4f}, Length Scale: {lengthscale.item():.4f}')
-    print(f'Length Scale: {lengthscale.item():.4f}')
-    alpha = 'NAN'
+    print(f'Epoch:{epoch}, Train Loss:{train_loss:.4f}, Valid Loss:{valid_loss:.4f}, Test Loss:{test_loss:.4f}')
+    # print(model.encoder.kernel.params(type_emb))
 
 print(f' Valid Last Event RMSE:{val_RMSE:.4f}, Test Last Event RMSE:{test_RMSE:.4f}')
 print(f' Valid All Event RMSE:{val_all_RMSE:.4f}, Test All Event RMSE:{test_all_RMSE:.4f}')
 
-# type_emb=model.encoder.type_emb.weight* math.sqrt(model.d_model)
-# lengthscale  =model.encoder.kernel.lengthscale(type_emb)[-1]
+if params.kernel_type == 1:
+    alpha = 'NAN'
+else:
+    alpha = params.alpha
 
-# alpha  =model.encoder.kernel.alpha(type_emb)[-1]
 
-# s,l = model.encoder.sigmoid.params(model.encoder.type_emb.weight)[-1]
-# alpha,lengthscale = model.encoder.kernel.params(model.encoder.type_emb.weight)[-1]
-
-# print(f'Length Scale: {length_scale.item():.4f}, Gate Param s: {s:.4f}, Gate Param l: {l:.4f}')
-# print(f'Alpha: {alpha.item():.4f}, Length Scale: {lengthscale.item():.4f}, Gate Param s: {s:.4f}, Gate Param l: {l:.4f}')
-
-# print(f'Alpha: {alpha.item():.4f}, Length Scale: {lengthscale.item():.4f}')
-# print(f'Length Scale: {lengthscale.item():.4f}')
-
+# type_emb = model.encoder.type_emb.weight * math.sqrt(model.d_model)
+# length_scale = model.encoder.kernel.params(type_emb)[0]['length_scale']
+length_scale = params.length_scale
 results_to_record = [str(params.data), str(params.epoch), str(params.batch_size), str(params.d_model),
-                     str(params.d_type),str(params.lr), str(params.beta), str(valid_loss.item()), str(test_loss.item()),
-                     str(val_all_RMSE.item()), str(test_all_RMSE.item()), str(lengthscale.item()), str(alpha),
-                     str(params.normalized),str(params.param_reg)]
+                     str(params.d_type), str(params.lr), str(train_loss.item()), str(valid_loss.item()),
+                     str(test_loss.item()),
+                     str(val_all_RMSE.item()), str(test_all_RMSE.item()), str(length_scale), str(alpha),
+                     str(params.normalized), str(params.reg_param), str(params.softmax)]
 
 with open(r'results.csv', 'a', newline='') as f:
     writer = csv.writer(f)
