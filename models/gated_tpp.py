@@ -13,21 +13,22 @@ import kernel_functions
 class gated_tpp(nn.Module):
 
     def __init__(self,
-                 num_types, d_model, d_type=1, t_max=200, dropout=0.1, length_scale=1.0,
-                 kernel_type='squared_exponential',
-                 alpha=1.0, softmax=False):
+                 num_types, d_model, d_type=1, dropout=0.1, length_scale=1.0,
+                 kernel_type='squared_exponential',s=1.0,l = 1.0,
+                 alpha=1.0, softmax=False,embed_time = False,timetovec= False):
         super().__init__()
 
         self.d_model = d_model
         self.d_type = d_type
         self.num_types = num_types
-        self.encoder = Encoder(num_types, d_model, d_type, t_max=t_max, length_scale=length_scale,
-                               kernel_type=kernel_type, alpha=alpha, test_softmax=softmax)
+        self.encoder = Encoder(num_types, d_model, d_type, length_scale=length_scale,
+                               kernel_type=kernel_type, alpha=alpha, test_softmax=softmax,embed_time=embed_time,
+                               timetovec =timetovec,s =s,l = l)
         self.norm = nn.LayerNorm(d_model, eps=1e-6)
         self.decoder = Decoder(num_types, d_model, dropout)
 
     def forward(self, event_type, event_time, arrival_times):
-        scores, embeddings, _ = self.encoder(event_type, event_time)
+        scores, embeddings, _ = self.encoder(event_type, event_time,arrival_times)
         hidden = torch.matmul(scores, embeddings)
         hidden = self.norm(hidden)
 
@@ -38,21 +39,21 @@ class gated_tpp(nn.Module):
         sampled_times = sampled_arrival_times[:, :-1]
         ## Check the loss
 
-        # loss = torch.abs(arrival_times - sampled_times)
-        loss = (arrival_times - sampled_times)**2
+        loss = torch.abs(arrival_times - sampled_times)**2
+        # loss = (arrival_times - sampled_times)**2
         batch_lengths = (batch_types != 0).sum(-1).to('cpu')  ## Non events are 0
 
         batch_loss = nn.utils.rnn.pack_padded_sequence(loss.T, batch_lengths - 1, enforce_sorted=False)[0]
 
-        time_loss = batch_loss.sum()
+        time_loss = torch.sqrt(batch_loss.sum())
 
         ## Add Param Regularizer 1-D
-        type_emb = self.encoder.type_emb.weight * math.sqrt(self.d_model)
-        param_size = 0
+        # type_emb = self.encoder.type_emb.weight * math.sqrt(self.d_model)
+        # param_size = 0
         # for space in type_emb[1:]:
         #     param_size += torch.abs(self.encoder.kernel.alpha[0](space))
         # param_size = -param_size.sum()
-        loss = time_loss + reg_param * param_size
+        # loss = time_loss + reg_param * param_size
 
         return time_loss
 
@@ -74,7 +75,7 @@ class gated_tpp(nn.Module):
             optimizer.step()
         return epoch_loss, events
 
-    def validate_epoch(self, dataloader, device ='cpu',reg_param = 0):
+    def validate_epoch(self, dataloader, device='cpu', reg_param=0):
 
         epoch_loss = 0
         events = 0
@@ -107,36 +108,41 @@ class Encoder(nn.Module):
     """ A encoder model with self attention mechanism. """
 
     def __init__(self,
-                 num_types, d_model, d_type=1, t_max=200, length_scale=1.0, kernel_type='squared_exponential',
-                 alpha=1.0,
-                 test_softmax=False):
+                 num_types, d_model, d_type=1, length_scale=1.0, kernel_type='squared_exponential',
+                 alpha=1.0,s = 1.0,l = 1.0,
+                 test_softmax=False,embed_time = False,timetovec = False):
         super().__init__()
 
         self.d_model = d_model
         self.d_type = d_type
         self.num_types = num_types
-
+        if timetovec:
+            self.embedding = TimetoVec(d_model)
+        else:
+            self.embedding = BiasedPositionalEmbedding(d_model, max_len=4096)
+        # self.embedding = nn.Embedding(num_types + 1, d_model, padding_idx=0)
         self.type_emb = nn.Embedding(num_types + 1, d_type, padding_idx=0)
+
         # self.w_k = torch.tensor([math.pow(10000.0, 2.0 * (i) / d_model) for i in range(d_model)])
 
-        self.w_k = torch.tensor([math.pow(10000.0, 2.0 * ((i//2)+1) / d_model) for i in range(d_model)])
-        # self.sigmoid = kernel_functions.SigmoidGate(num_types, d_type, norm=1, t_max=t_max)
-        # self.kernel = getattr(kernel_functions, kernel_type +'_kernel')(num_types, d_type, norm=1, t_max=t_max,alpha= alpha)
-        self.kernel = kernel_functions.fixed_kernel(t_max=t_max, length_scale=length_scale,alpha = alpha)
-        self.t_max = t_max
+        self.w_k = torch.tensor([math.pow(10000.0, 2.0 * ((i // 2) + 1) / d_model) for i in range(d_model)])
+        self.sigmoid = kernel_functions.SigmoidGate(num_types, d_type, norm=1, l = l , s = s)
+        # self.kernel = getattr(kernel_functions, kernel_type +'_kernel')(num_types, d_type, norm=1)
+        self.kernel = kernel_functions.rational_quadratic_kernel(num_types,d_type,alpha=alpha,lengthscale = length_scale)
         self.softmax = test_softmax
-
-    def forward(self, event_type, event_time):
+        self.embed_time = embed_time
+    def forward(self, event_type, event_time, arrival_times):
         """ Encode event sequences via kernel functions """
 
         # Temporal Encoding
-        temp_enc = event_time.unsqueeze(-1) / self.w_k.to(event_time.device)
-        temp_enc[:, :, 0::2] = torch.sin(temp_enc[:, :, 0::2])
-        temp_enc[:, :, 1::2] = torch.cos(temp_enc[:, :, 1::2])
+
+        temp_enc = self.embedding(event_type, arrival_times)
+        # temp_enc = self.embedding(event_type) * math.sqrt(self.d_model)
+
 
         ## Type Encoding
-        type_embedding = self.type_emb(event_type) * math.sqrt(
-            self.d_model)  ## Scale the embedding with the hidden vector size
+        type_embedding = self.type_emb(event_type) * math.sqrt(self.d_model)
+        ## Scale the embedding with the hidden vector size
         embedding = temp_enc
         # embedding = torch.cat([temp_enc, type_embedding], dim=-1)
 
@@ -144,10 +150,15 @@ class Encoder(nn.Module):
         subsequent_mask = get_subsequent_mask(event_type)
 
         ## Time Scores
-        normalized_event_time = event_time
-        xt_bar = normalized_event_time.unsqueeze(1). \
-            expand(normalized_event_time.size(0), normalized_event_time.size(1), normalized_event_time.size(1))
-        xt = xt_bar.transpose(1, 2)
+        if self.embed_time:
+            xt_bar = embedding.unsqueeze(1).expand(embedding.size(
+                0), embedding.size(1), embedding.size(1), embedding.size(-1))
+            xt= xt_bar.transpose(1, 2)
+        else:
+            normalized_event_time =event_time
+            xt_bar = normalized_event_time.unsqueeze(1). \
+                expand(normalized_event_time.size(0), normalized_event_time.size(1), normalized_event_time.size(1))
+            xt = xt_bar.transpose(1, 2)
 
         ## Space  Input
         xd_bar = type_embedding.unsqueeze(1).expand(type_embedding.size(
@@ -155,8 +166,7 @@ class Encoder(nn.Module):
         xd = xd_bar.transpose(1, 2)
 
         # scores = self.kernel((xt, xt_bar), (xd, xd_bar)) * (self.sigmoid((xt, xt_bar), (xd, xd_bar)))
-        # scores = self.kernel((xt, xt_bar), (xd, xd_bar))
-        scores = self.kernel((xt, xt_bar))
+        scores = self.kernel((xt, xt_bar),(xd - xd_bar))
         if self.softmax:
             scores = scores.masked_fill_(subsequent_mask == 0, value=-1e5)
             scores = F.softmax(scores, dim=-1)
@@ -167,6 +177,7 @@ class Encoder(nn.Module):
         self.t_diff = (xt - xt_bar)
 
         return scores, embedding, self.t_diff
+
 
 
 class Decoder(nn.Module):
@@ -235,3 +246,44 @@ def get_subsequent_mask(seq):
     subsequent_mask = subsequent_mask.unsqueeze(0).expand(sz_b, -1, -1)  # b x ls x ls
     subsequent_mask = (subsequent_mask - 1) ** 2
     return subsequent_mask
+
+
+class BiasedPositionalEmbedding(nn.Module):
+    def __init__(self, d_model, max_len=4096):
+        super().__init__()
+
+        position = torch.arange(0, max_len).float().unsqueeze(1)
+        div_term = (torch.arange(0, d_model, 2).float() * -(math.log(10000.0) / d_model)).exp()
+        self.register_buffer('position', position)
+        self.register_buffer('div_term', div_term)
+
+        self.Wt = nn.Linear(1, d_model // 2, bias=False)
+
+    def forward(self, x, interval):
+        phi = self.Wt(interval.unsqueeze(-1))
+        aa = len(x.size())
+        if aa > 1:
+            length = x.size(1)
+        else:
+            length = x.size(0)
+
+        # pe = torch.zeros(length, len(self.Wt.weight)).float()
+        arc = (self.position[:length] * self.div_term).unsqueeze(0)
+        pe_sin = torch.sin(arc + phi)
+        pe_cos = torch.cos(arc + phi)
+        pe = torch.cat([pe_sin, pe_cos], dim=-1)
+
+        return pe
+
+class TimetoVec(nn.Module):
+    def __init__(self, d_model):
+        super().__init__()
+
+        self.Wt = nn.Linear(1, d_model , bias=True)
+
+    def forward(self, eventype, time):
+
+        t2v = self.Wt(time.unsqueeze(-1))
+        t2v[:,:,1:] = torch.sin(t2v[:,:,1:].clone())
+
+        return t2v

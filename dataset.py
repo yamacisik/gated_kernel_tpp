@@ -5,7 +5,7 @@ import torch.utils.data
 class EventData(torch.utils.data.Dataset):
     """ Event stream dataset. """
 
-    def __init__(self, data):
+    def __init__(self, data,t_max = None):
         """
         Data should be a list of event streams; each event stream is a list of dictionaries;
         each dictionary contains: time_since_start, time_since_last_event, type_event
@@ -13,11 +13,12 @@ class EventData(torch.utils.data.Dataset):
 
         self.has_intensity = False
 
-        self.time = [[elem['time_since_start'] for elem in inst] for inst in data]
-        self.time_gap = [[elem['time_since_last_event'] for elem in inst] for inst in data]
+        self.time = [[elem['time_since_start'] for elem in inst] for inst in data] if t_max == None \
+            else [[elem['time_since_start']/t_max for elem in inst] for inst in data]
+        self.time_gap = [[elem['time_since_last_event'] for elem in inst] for inst in data] if t_max == None \
+            else [[elem['time_since_last_event'] / t_max for elem in inst] for inst in data]
         # plus 1 since there could be event type 0, but we use 0 as padding
         self.event_type = [[elem['type_event'] + 1 for elem in inst] for inst in data]
-
 
         if 'intensities'  in data[0][0].keys():
             self.intensities = [[elem['intensities'][0]  for elem in inst] for inst in data]
@@ -69,10 +70,10 @@ def collate_fn(insts):
     return time, time_gap, event_type,intensities
 
 
-def get_dataloader(data, batch_size, shuffle=True):
+def get_dataloader(data, batch_size, shuffle=True,t_max = None):
     """ Prepare dataloader. """
 
-    ds = EventData(data)
+    ds = EventData(data,t_max = t_max)
     dl = torch.utils.data.DataLoader(
         ds,
         num_workers=0,

@@ -12,10 +12,11 @@ import math
 model_name = str(datetime.now())[:19].replace(':', '_').replace(' ', '_').replace('-', '_')
 
 DATASET_PATHS = {'sin_hawkes': '../data/simulated/sin_hawkes/', 'power_hawkes': '../data/simulated/power_hawkes/',
+                'poisson': '../data/simulated/poisson/',
                  '2_d_hawkes': '../data/simulated/2_d_hawkes/', 'mimic2': '../data/mimic/',
                  'stackOverflow': '../data/stackOverflow/', 'retweet': '../data/retweet/'}
 
-DATASET_EVENT_TYPES = {'sin_hawkes': 1, 'power_hawkes': 1, '2_d_hawkes': 2, 'mimic2': 75, 'stackOverflow': 22,
+DATASET_EVENT_TYPES = {'sin_hawkes': 1, 'power_hawkes': 1,'poisson':1, '2_d_hawkes': 2, 'mimic2': 75, 'stackOverflow': 22,
                        'retweet': 3}
 
 KERNEL_TYPES = {1: 'squared_exponential', 2: 'rational_quadratic'}
@@ -31,27 +32,39 @@ parser = argparse.ArgumentParser()
 
 parser.add_argument('-data', type=str, default='power_hawkes')
 parser.add_argument('-model', type=int, default=1)
-parser.add_argument('-epoch', type=int, default=100)
+parser.add_argument('-epoch', type=int, default=50)
 parser.add_argument('-batch_size', type=int, default=20)
-parser.add_argument('-d_model', type=int, default=22)
+parser.add_argument('-d_model', type=int, default=32)
 parser.add_argument('-d_type', type=int, default=8)
 parser.add_argument('-alpha', type=float, default=1.0)
 parser.add_argument('-length_scale', type=float, default=1.0)
+parser.add_argument('-l', type=float, default=1.0)
+parser.add_argument('-s', type=float, default=1.0)
 parser.add_argument('-reg_param', type=float, default=0.0)
 parser.add_argument('-kernel_type', type=int, default=1)
 
 parser.add_argument('-dropout', type=float, default=0.1)
 parser.add_argument('-lr', type=float, default=0.0001)
-parser.add_argument('-l2', type=float, default=0.0001)
+parser.add_argument('-l2', type=float, default=0.0000)
 parser.add_argument('-seed', type=int, default=42)
 parser.add_argument('-save', type=bool, default=True)
-parser.add_argument('-normalized', type=int, default=0)
+parser.add_argument('-normalize', type=int, default=0)
+parser.add_argument('-embed_time', type=int, default=0)
+parser.add_argument('-timetovec', type=int, default=0)
 parser.add_argument('-softmax', type=int, default=0)
 
 params = parser.parse_args()
 
-params.normalized = True if params.normalized == 1 else False
+params.timetovec = True if params.timetovec == 1 else False
+params.normalize = True if params.normalize == 1 else False
+params.embed_time = True if params.embed_time == 1 else False
 params.softmax = True if params.softmax == 1 else False
+
+time_stamp =datetime.now()
+date = str(time_stamp.date()).replace('-','')
+time = str(time_stamp.time())[:8].replace(':','')
+modelname = date +'_' +time
+
 # ------Reproducibility-------
 
 torch.manual_seed(params.seed)
@@ -89,19 +102,22 @@ with open(data_path + 'test.pkl', 'rb') as f:
     data = pickle.load(f, encoding='latin-1')
     test_data = data['test']
 
-trainloader = get_dataloader(train_data, params.batch_size, shuffle=True)
-testloader = get_dataloader(test_data, 1, shuffle=False)  # 1 makes it easy to calculate RMSE
-valloader = get_dataloader(dev_data, 1, shuffle=False)
-
 t_max = max([seq[-1]['time_since_start'] for data in [train_data, dev_data, test_data] for seq in data])
-if not params.normalized:
+if not params.normalize:
     'Arrival Times are not normalized...'
     t_max = 1
 
+trainloader = get_dataloader(train_data, params.batch_size, shuffle=True,t_max = t_max)
+testloader = get_dataloader(test_data, 1, shuffle=False,t_max = t_max)  # 1 makes it easy to calculate RMSE
+valloader = get_dataloader(dev_data, 1, shuffle=False,t_max = t_max)
+
+
+
 print(t_max)
-model = gated_tpp(num_types, params.d_model, params.d_type, t_max=t_max, dropout=params.dropout,
+model = gated_tpp(num_types, params.d_model, params.d_type,dropout=params.dropout,
                   length_scale=params.length_scale,
-                  kernel_type=KERNEL_TYPES[params.kernel_type], alpha=params.alpha, softmax=params.softmax)
+                  kernel_type=KERNEL_TYPES[params.kernel_type], alpha=params.alpha, softmax=params.softmax,
+                  embed_time=params.embed_time,timetovec=params.timetovec,l = params.l,s = params.s)
 #
 optimizer = optim.Adam(filter(lambda x: x.requires_grad, model.parameters()),
                        params.lr, betas=(0.9, 0.999), eps=1e-05, weight_decay=params.l2)
@@ -125,12 +141,17 @@ for epoch in range(params.epoch):
 
     # type_emb = model.encoder.type_emb.weight * math.sqrt(model.d_model)
     # length_scale = model.encoder.kernel.params(type_emb)[0]['length_scale']
+    # if params.kernel_type == 1:
+    #     alpha = 'NAN'
+    # else:
+    #     alpha = model.encoder.kernel.params(type_emb)[0]['alpha']
+        # alpha = params.alpha
     # with open('log.txt', 'a') as f:
     #     f.write('{epoch}, {loss: 8.5f}, {rmse_all: 8.5f}, {rmse_last: 8.5f}, {length_scale: 8.5f}\n'
     #             .format(epoch=epoch, loss=valid_loss, rmse_all=val_RMSE, rmse_last=val_RMSE,length_scale =length_scale ))
 
     print(f'Epoch:{epoch}, Train Loss:{train_loss:.4f}, Valid Loss:{valid_loss:.4f}, Test Loss:{test_loss:.4f}')
-    # print(model.encoder.kernel.params(type_emb))
+    # print(f'Lengthscale:{length_scale}, Alpha:{alpha}')
 
 print(f' Valid Last Event RMSE:{val_RMSE:.4f}, Test Last Event RMSE:{test_RMSE:.4f}')
 print(f' Valid All Event RMSE:{val_all_RMSE:.4f}, Test All Event RMSE:{test_all_RMSE:.4f}')
@@ -141,14 +162,14 @@ else:
     alpha = params.alpha
 
 
-# type_emb = model.encoder.type_emb.weight * math.sqrt(model.d_model)
-# length_scale = model.encoder.kernel.params(type_emb)[0]['length_scale']
 length_scale = params.length_scale
 results_to_record = [str(params.data), str(params.epoch), str(params.batch_size), str(params.d_model),
                      str(params.d_type), str(params.lr), str(train_loss.item()), str(valid_loss.item()),
-                     str(test_loss.item()),
-                     str(val_all_RMSE.item()), str(test_all_RMSE.item()), str(length_scale), str(alpha),
-                     str(params.normalized), str(params.reg_param), str(params.softmax)]
+                     str(test_loss.item()),str(val_all_RMSE.item()),
+                     str(test_all_RMSE.item()), str(val_RMSE.item()),
+                     str(test_RMSE.item()),
+                     str(length_scale), str(alpha),str(params.softmax),
+                     str(params.embed_time),str(params.timetovec)]
 
 with open(r'results.csv', 'a', newline='') as f:
     writer = csv.writer(f)
@@ -156,4 +177,5 @@ with open(r'results.csv', 'a', newline='') as f:
 
 model_name = params.data + 'debug_model'
 if params.save:
-    torch.save(model.state_dict(), 'trained_models/' + model_name + '.pt')
+    torch.save(model.state_dict(), 'trained_models/' + modelname + '.pt')
+

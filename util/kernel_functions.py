@@ -7,7 +7,7 @@ import math
 class rational_quadratic_kernel(nn.Module):
 
     def __init__(self,
-                 num_types, d_type, sigma=1, norm=1, t_max=200, alpha=1.0):
+                 num_types, d_type, sigma=1, norm=1, alpha=1,lengthscale = 1.0):
         super().__init__()
 
         self.d_type = d_type
@@ -16,7 +16,6 @@ class rational_quadratic_kernel(nn.Module):
         self.sigma = sigma
         self.param_loss = 0
         self.scores = None
-        self.t_max = 1
         """
         If the model is 1-D we still need the type embedding as an input and train a linear layer followed by softplus
         to make sure the length_scale parameter is positive. Adding a parameter followed by a sigmoid creates a non leaf
@@ -24,9 +23,11 @@ class rational_quadratic_kernel(nn.Module):
         """
 
         if num_types == 1:
-            self.lengthscale = nn.Sequential(nn.Linear(d_type, 1, bias=False), nn.Softplus())
+            # self.lengthscale = nn.Sequential(nn.Linear(d_type, d_type, bias=False),nn.ReLU(),nn.Linear(d_type, 1, bias=False), nn.Sigmoid())
+            # self.lengthscale = nn.Sequential(nn.Linear(d_type, 1, bias=False), nn.Softplus())
             # self.alpha = nn.Sequential(nn.Linear(d_type, 1, bias=False), nn.Sigmoid())
             self.register_buffer('alpha',torch.tensor([alpha]),persistent = False)
+            self.register_buffer('lengthscale', torch.tensor([lengthscale]), persistent=False)
 
         else:
             self.lengthscale = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Softplus())
@@ -36,17 +37,20 @@ class rational_quadratic_kernel(nn.Module):
 
     def forward(self, x, type_emb):
 
-        d = (torch.abs(x[0] - x[1]) / self.t_max) ** self.norm
+        if len(x[0].size()) > 3:
+            d = (torch.abs(x[0] - x[1]) ** self.norm).sum(-1) ** (1 / self.norm)
+        else:
+            d = torch.abs(x[0] - x[1])
 
         if self.num_types == 1:
             space = type_emb[0]
         else:
             space = torch.cat(type_emb[0], type_emb[1], -1)
 
-        lengthscale = self.lengthscale(space).squeeze()
+        # lengthscale = self.lengthscale(space).squeeze()
         # alpha = self.alpha(space).squeeze()
         alpha = self.alpha
-
+        lengthscale = self.lengthscale
         self.scores = (self.sigma ** 2) * (1 + (d ** 2) / (alpha * lengthscale ** 2)) ** (-alpha)
 
         return self.scores
@@ -65,7 +69,7 @@ class rational_quadratic_kernel(nn.Module):
 
 class fixed_kernel(nn.Module):
 
-    def __init__(self, sigma=1, norm=1, t_max=200,length_scale = 1.0,alpha = 0.1):
+    def __init__(self, sigma=1, norm=1,length_scale = 1.0,alpha = 0.1):
         super().__init__()
 
 
@@ -74,22 +78,23 @@ class fixed_kernel(nn.Module):
         self.length_scale = length_scale
         self.alpha = alpha
         self.scores = None
-        self.t_max = t_max
 
     def forward(self, x):
 
-        d = (torch.abs(x[0] - x[1]) / self.t_max) ** self.norm
+        if len(x[0].size()) > 3:
+            d = (torch.abs(x[0] - x[1]) ** self.norm).sum(-1) ** (1 / self.norm)
+        else:
+            d = torch.abs(x[0] - x[1])
 
         # self.scores = (self.sigma ** 2) * torch.exp(-(d ** 2) / self.length_scale ** 2)
         self.scores = (self.sigma ** 2) * (1 + (d ** 2) / (self.alpha * self.length_scale ** 2)) ** (-self.alpha)
-
         return self.scores
 
 
 class squared_exponential_kernel(nn.Module):
 
     def __init__(self,
-                 num_types, d_type, sigma=1, norm=1, t_max=200, alpha=2.0,beta = 1.0):
+                 num_types, d_type, sigma=1, norm=1,alpha=2.0,beta = 1.0):
         super().__init__()
 
         self.d_type = d_type
@@ -98,7 +103,7 @@ class squared_exponential_kernel(nn.Module):
         self.sigma = sigma
         self.param_loss = 0
         self.scores = None
-        self.t_max = 1
+
         """
         If the model is 1-D we still need the type embedding as an input and train a linear layer followed by softplus
         to make sure the length_scale parameter is positive. Adding a parameter followed by a sigmoid creates a non leaf
@@ -106,19 +111,18 @@ class squared_exponential_kernel(nn.Module):
         """
 
         if num_types == 1:
-            if self.t_max == 1:
-                self.lengthscale = nn.Sequential(nn.Linear(d_type, 1, bias=False), nn.Softplus(beta=beta))
-            else:
-                self.lengthscale = nn.Sequential(nn.Linear(d_type, 1, bias=False), nn.Sigmoid())
+            self.lengthscale = nn.Sequential(nn.Linear(d_type, 1, bias=False), nn.Softplus(beta=beta))
+
         else:
-            if self.t_max == 1:
-                self.lengthscale = nn.Sequential(nn.Linear(d_type*2, 1, bias=False), nn.Softplus(beta=beta))
-            else:
-                self.lengthscale = nn.Sequential(nn.Linear(d_type*2, 1, bias=False), nn.Sigmoid())
+
+            self.lengthscale = nn.Sequential(nn.Linear(d_type*2, 1, bias=False), nn.Softplus(beta=beta))
+
 
     def forward(self, x, type_emb):
-
-        d = (torch.abs(x[0] - x[1]) / self.t_max) ** self.norm
+        if len(x[0].size())>3:
+            d = (torch.abs(x[0] - x[1])**self.norm).sum(-1)**(1/self.norm)
+        else:
+            d = torch.abs(x[0] - x[1])
 
         if self.num_types == 1:
             space = type_emb[0]
@@ -140,18 +144,18 @@ class squared_exponential_kernel(nn.Module):
 
 class SigmoidGate(nn.Module):
 
-    def __init__(self, num_types, d_type, norm=1, t_max=200,s = 0.1):
+    def __init__(self, num_types, d_type, norm=1,s = 1.0,l = 1.0):
         super().__init__()
 
         self.d_model = d_type
         self.num_types = num_types
-        self.t_max = t_max
+
         self.norm = 1
         self.scores = None
         if num_types == 1:
-            self.l = nn.Sequential(nn.Linear(d_type, 1, bias=False), nn.Softplus())
-
+            # self.l = nn.Sequential(nn.Linear(d_type, 1, bias=False), nn.Softplus())
             self.register_buffer('s',torch.tensor([s]),persistent = False)
+            self.register_buffer('l', torch.tensor([l]), persistent=False)
             # self.s = nn.Sequential(nn.Linear(d_type, 1, bias=False), nn.Softplus())
 
         else:
@@ -160,7 +164,7 @@ class SigmoidGate(nn.Module):
 
     def forward(self, x, type_emb):
 
-        d = (torch.abs(x[0] - x[1]) / self.t_max) ** self.norm
+        d = torch.abs(x[0] - x[1]) + 1e-6
 
         if self.num_types == 1:
             space = type_emb[0]
@@ -168,11 +172,12 @@ class SigmoidGate(nn.Module):
             space = torch.cat(type_emb[0], type_emb[1], -1)
 
 
-        l = self.l(space).squeeze()
+        # l = self.l(space).squeeze()
         # s = self.s(space).squeeze()
 
         s = self.s
-        self.scores = 0.5 + 0.5 * torch.tanh((d - l) / s)
+        l = self.l
+        self.scores = 1 + torch.tanh((d - l) / s)
 
         return self.scores
 
@@ -180,9 +185,10 @@ class SigmoidGate(nn.Module):
 
         params = []
         for space in type_emb[1:]:
-            l = self.l(space).item()
+            # l = self.l(space).item()
             # s = self.s(space).item()
             s = self.s.item()
+            l = self.l.item()
             params.append({'Gate_Param L': l, 'Gate_Param S': s, 'Norm-P': self.norm})
         return params
 
