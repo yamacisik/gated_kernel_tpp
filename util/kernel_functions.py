@@ -7,13 +7,13 @@ import math
 class rational_quadratic_kernel(nn.Module):
 
     def __init__(self,
-                 num_types, d_type, sigma=1, norm=1, alpha=1,lengthscale = 1.0):
+                 num_types, d_type, sigma=1, p=1, alpha=1,lengthscale = 1.0):
         super().__init__()
 
         self.d_type = d_type
         self.num_types = num_types
-        self.norm = norm
-        self.sigma = sigma
+        self.norm = p
+        # self.sigma = sigma
         self.param_loss = 0
         self.scores = None
         """
@@ -24,10 +24,19 @@ class rational_quadratic_kernel(nn.Module):
 
         if num_types == 1:
             # self.lengthscale = nn.Sequential(nn.Linear(d_type, d_type, bias=False),nn.ReLU(),nn.Linear(d_type, 1, bias=False), nn.Sigmoid())
-            # self.lengthscale = nn.Sequential(nn.Linear(d_type, 1, bias=False), nn.Softplus())
+            # self.lengthscale = nn.Sequential(nn.Linear(d_type, 1, bias=True), nn.Softplus())
+
+            self.lengthscale = torch.nn.Parameter(torch.randn(1))
+            # self.alpha = torch.nn.Parameter(torch.randn(1))
+            self.sigma = torch.nn.Parameter(torch.randn(1))
+
+            # self.lengthscale.requires_grad = True
+
+
             # self.alpha = nn.Sequential(nn.Linear(d_type, 1, bias=False), nn.Sigmoid())
-            self.register_buffer('alpha',torch.tensor([alpha]),persistent = False)
-            self.register_buffer('lengthscale', torch.tensor([lengthscale]), persistent=False)
+            # self.register_buffer('alpha',torch.tensor([alpha]),persistent = False)
+            # self.register_buffer('lengthscale', torch.tensor([lengthscale]), persistent=False)
+            # self.register_buffer('sigma', torch.tensor([sigma]), persistent=False)
 
         else:
             self.lengthscale = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Softplus())
@@ -40,8 +49,7 @@ class rational_quadratic_kernel(nn.Module):
         if len(x[0].size()) > 3:
             d = (torch.abs(x[0] - x[1]) ** self.norm).sum(-1) ** (1 / self.norm)
         else:
-            d = torch.abs(x[0] - x[1])
-
+            d = torch.abs(x[0] - x[1])**self.norm
         if self.num_types == 1:
             space = type_emb[0]
         else:
@@ -49,9 +57,16 @@ class rational_quadratic_kernel(nn.Module):
 
         # lengthscale = self.lengthscale(space).squeeze()
         # alpha = self.alpha(space).squeeze()
-        alpha = self.alpha
-        lengthscale = self.lengthscale
-        self.scores = (self.sigma ** 2) * (1 + (d ** 2) / (alpha * lengthscale ** 2)) ** (-alpha)
+        # alpha = self.alpha
+        # lengthscale = self.lengthscale
+        # sigma = self.sigma
+
+
+        lengthscale = F.softplus(self.lengthscale)
+        alpha = 1
+        sigma = F.sigmoid(self.sigma)
+
+        self.scores = (sigma ** 2) * (1 + (d ** 2) / (alpha * lengthscale ** 2)) ** (-alpha)
 
         return self.scores
 
@@ -66,6 +81,47 @@ class rational_quadratic_kernel(nn.Module):
             params.append({'length_scale': lengthscale, 'alpha': alpha, 'sigma': self.sigma, 'Norm-P': self.norm})
 
         return params
+
+class non_parametric_kernel(nn.Module):
+
+    def __init__(self,
+                 num_types, d_type, sigma=1, p=1, alpha=1,lengthscale = 1.0):
+        super().__init__()
+
+        self.d_type = d_type
+        self.num_types = num_types
+        self.norm = p
+        self.sigma = sigma
+        self.scores = None
+        """
+        If the model is 1-D we still need the type embedding as an input and train a linear layer followed by softplus
+        to make sure the length_scale parameter is positive. Adding a parameter followed by a sigmoid creates a non leaf
+        tensor and there for doesn't work.
+        """
+
+        if num_types == 1:
+            self.kernel_function = nn.Sequential(nn.Linear(1, 1, bias=False), nn.Softplus())
+
+        else:
+            self.lengthscale = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Softplus())
+            self.alpha = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False),
+                                       nn.Sigmoid()) if alpha == None else torch.tensor(alpha)
+
+    def forward(self, x, type_emb):
+        pass
+
+        d = torch.abs(x[0] - x[1])**self.norm
+
+        # if self.num_types == 1:
+        #     space = type_emb[0]
+        # else:
+        #     space = torch.cat(type_emb[0], type_emb[1], -1)
+
+        # lengthscale = self.lengthscale(space).squeeze()
+        # alpha = self.alpha(space).squeeze()
+
+
+
 
 class fixed_kernel(nn.Module):
 

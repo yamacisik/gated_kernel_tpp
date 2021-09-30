@@ -1,22 +1,12 @@
 #!/bin/bash
 
-#python main.py -data sin_hawkes -d_model 128 -d_type 128 -kernel_type 2  -epoch 50 -lr 0.0001 -batch 20 -alpha 1.0 -length_scale  5000 -l 0.0 -s 0.0
-#python main.py -data sin_hawkes -d_model 128 -d_type 128 -kernel_type 2  -epoch 50 -lr 0.0001 -batch 20 -alpha 1.0 -length_scale  0.2 -l 1.25 -s 0.55
-#python main.py -data sin_hawkes -d_model 128 -d_type 128 -kernel_type 2  -epoch 50 -lr 0.0001 -batch 20 -alpha 1.0 -length_scale  0.1 -l 0.99 -s 0.433
-#python main.py -data sin_hawkes -d_model 128 -d_type 128 -kernel_type 2  -epoch 50 -lr 0.0001 -batch 20 -alpha 1.0 -length_scale  0.01 -l 0.0 -s 0.0
-#python main.py -data sin_hawkes -d_model 128 -d_type 128 -kernel_type 2  -epoch 50 -lr 0.0001 -batch 20 -alpha 1.0 -length_scale  0.00001 -l 0.0 -s 0.0
-#
-#
-#python main.py -data sin_hawkes -d_model 128 -d_type 128 -kernel_type 2  -epoch 50 -lr 0.0001 -batch 20 -alpha 1.0 -length_scale  5000 -l 0.0 -s 0.0 -timetovec 1
-#python main.py -data sin_hawkes -d_model 128 -d_type 128 -kernel_type 2  -epoch 50 -lr 0.0001 -batch 20 -alpha 1.0 -length_scale  0.2 -l 1.25 -s 0.55 -timetovec 1
-#python main.py -data sin_hawkes -d_model 128 -d_type 128 -kernel_type 2  -epoch 50 -lr 0.0001 -batch 20 -alpha 1.0 -length_scale  0.1 -l 0.99 -s 0.433 -timetovec 1
-#python main.py -data sin_hawkes -d_model 128 -d_type 128 -kernel_type 2  -epoch 50 -lr 0.0001 -batch 20 -alpha 1.0 -length_scale  0.01 -l 0.0 -s 0.0 -timetovec 1
-#python main.py -data sin_hawkes -d_model 128 -d_type 128 -kernel_type 2  -epoch 50 -lr 0.0001 -batch 20 -alpha 1.0 -length_scale  0.00001 -l 0.0 -s 0.0 -timetovec 1
-
-
-
-python main.py -data power_hawkes -d_model 128 -d_type 256 -kernel_type 2  -epoch 50 -lr 0.0001 -batch 20 -alpha 1.0 -length_scale  5
-python main.py -data power_hawkes -d_model 128 -d_type 256 -kernel_type 2  -epoch 50 -lr 0.0001 -batch 20 -alpha 1.0 -length_scale 0.01
-
-python main.py -data power_hawkes -d_model 128 -d_type 256 -kernel_type 2  -epoch 50 -lr 0.0001 -batch 20 -alpha 1.0 -length_scale  5 -timetovec 1
-python main.py -data power_hawkes -d_model 128 -d_type 256 -kernel_type 2  -epoch 50 -lr 0.0001 -batch 20 -alpha 1.0 -length_scale  0.01 -timetovec 1
+for epoch in 100 200
+  do
+    for data in exp_hawkes power_hawkes
+    do
+      for lr in 0.001 0.0001
+      do
+      python main.py -data $data -d_model 128 -d_type 32 -kernel_type 2  -epoch 150 -lr $lr -batch 5 -alpha 0.6  -timetovec 0 -length_scale 0.2  -sigma 0.7
+      done
+      done
+      done
