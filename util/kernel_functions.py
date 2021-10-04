@@ -28,7 +28,7 @@ class rational_quadratic_kernel(nn.Module):
 
             self.lengthscale = torch.nn.Parameter(torch.randn(1))
             # self.alpha = torch.nn.Parameter(torch.randn(1))
-            self.sigma = torch.nn.Parameter(torch.randn(1))
+            # self.sigma = torch.nn.Parameter(torch.randn(1))
 
             # self.lengthscale.requires_grad = True
 
@@ -62,9 +62,9 @@ class rational_quadratic_kernel(nn.Module):
         # sigma = self.sigma
 
 
-        lengthscale = F.softplus(self.lengthscale)
+        lengthscale = 2.5
         alpha = 1
-        sigma = F.sigmoid(self.sigma)
+        sigma = 1
 
         self.scores = (sigma ** 2) * (1 + (d ** 2) / (alpha * lengthscale ** 2)) ** (-alpha)
 
@@ -103,7 +103,7 @@ class non_parametric_kernel(nn.Module):
             self.kernel_function = nn.Sequential(nn.Linear(1, 1, bias=False), nn.Softplus())
 
         else:
-            self.lengthscale = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Softplus())
+            self.lengthscale = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Softplus(beta = 5))
             self.alpha = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False),
                                        nn.Sigmoid()) if alpha == None else torch.tensor(alpha)
 
@@ -210,9 +210,14 @@ class SigmoidGate(nn.Module):
         self.scores = None
         if num_types == 1:
             # self.l = nn.Sequential(nn.Linear(d_type, 1, bias=False), nn.Softplus())
-            self.register_buffer('s',torch.tensor([s]),persistent = False)
-            self.register_buffer('l', torch.tensor([l]), persistent=False)
+            # self.register_buffer('s',torch.tensor([s]),persistent = False)
+            # self.register_buffer('l', torch.tensor([l]), persistent=False)
             # self.s = nn.Sequential(nn.Linear(d_type, 1, bias=False), nn.Softplus())
+
+            self.s = torch.nn.Parameter(torch.randn(1))
+            self.l = torch.nn.Parameter(torch.randn(1))
+            self.b = torch.nn.Parameter(torch.randn(1))
+
 
         else:
             self.l = nn.Sequential(nn.Linear(d_type*2, 1, bias=False), nn.Softplus())
@@ -231,9 +236,13 @@ class SigmoidGate(nn.Module):
         # l = self.l(space).squeeze()
         # s = self.s(space).squeeze()
 
-        s = self.s
-        l = self.l
-        self.scores = 1 + torch.tanh((d - l) / s)
+        # s = F.softplus(self.s,beta = 1)
+        s = 2.0
+        l = 4.2
+        # l = F.softplus(self.l,beta = 1)
+        # b = F.softplus(self.b,beta = 1.0)+1
+        b = 1
+        self.scores = b + torch.tanh((d - l) / s)
 
         return self.scores
 

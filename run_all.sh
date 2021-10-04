@@ -1,12 +1,15 @@
 #!/bin/bash
 
-for epoch in 100 200
-  do
-    for data in exp_hawkes power_hawkes
-    do
-      for lr in 0.001 0.0001
+
+
+
+      for softmax  in 0 1
       do
-      python main.py -data $data -d_model 128 -d_type 32 -kernel_type 2  -epoch 150 -lr $lr -batch 5 -alpha 0.6  -timetovec 0 -length_scale 0.2  -sigma 0.7
+      for lr  in 0.001
+      do
+        for data in sin_hawkes_2
+        do
+      python main.py -data $data -d_model 128 -d_type 32 -kernel_type 2  -epoch 10 -lr $lr -batch 1  -timetovec 0 -softmax $softmax
       done
       done
       done

@@ -12,12 +12,12 @@ import math
 model_name = str(datetime.now())[:19].replace(':', '_').replace(' ', '_').replace('-', '_')
 
 DATASET_PATHS = {'sin_hawkes': '../data/simulated/sin_hawkes/', 'power_hawkes': '../data/simulated/power_hawkes/',
-                'poisson': '../data/simulated/poisson/','exp_hawkes':'../data/simulated/exp_hawkes/',
+                'poisson': '../data/simulated/poisson/','exp_hawkes':'../data/simulated/exp_hawkes/','sin_hawkes_2':'../data/simulated/sin_hawkes_2/',
                  '2_d_hawkes': '../data/simulated/2_d_hawkes/', 'mimic2': '../data/mimic/',
                  'stackOverflow': '../data/stackOverflow/', 'retweet': '../data/retweet/'}
 
 DATASET_EVENT_TYPES = {'sin_hawkes': 1, 'power_hawkes': 1,'poisson':1, '2_d_hawkes': 2, 'mimic2': 75, 'stackOverflow': 22,
-                       'retweet': 3,'exp_hawkes':1}
+                       'retweet': 3,'exp_hawkes':1,'sin_hawkes_2':1}
 
 KERNEL_TYPES = {1: 'squared_exponential', 2: 'rational_quadratic'}
 MODELS = {1: 'gated_TPP', 2: 'LogNormMix'}
@@ -79,8 +79,8 @@ if torch.cuda.is_available():
     # torch.set_default_tensor_type(cuda_tensor)
     torch.cuda.manual_seed(seed=params.seed)
     torch.cuda.manual_seed_all(params.seed)
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
+    # torch.backends.cudnn.deterministic = True
+    # torch.backends.cudnn.benchmark = False
 else:
     # torch.set_default_tensor_type(cpu_tensor)
     device = 'cpu'
@@ -145,9 +145,13 @@ if params.timetovec:
     model.encoder.embedding.load_state_dict(stated_dict)
 
 
-# with open('log.txt', 'w') as f:
-#     f.write('Epoch, Loss, RMSE_ALL, RMSE_LAST, Lengthscale\n')
+log_name = 'training_logs/'+modelname+'_log.txt'
+with open(log_name, 'w') as f:
+    f.write('Epoch, train_loss, validation_loss,s,length_scale\n')
 
+train_losses = []
+validation_losses = []
+parameters = []
 for epoch in range(params.epoch):
     train_epoch_loss, train_events = model.train_epoch(trainloader, optimizer, params)
     valid_epoch_loss, valid_events, val_RMSE, val_all_RMSE = model.validate_epoch(valloader, device = params.device,reg_param=params.reg_param)
@@ -157,27 +161,38 @@ for epoch in range(params.epoch):
     valid_loss = valid_epoch_loss / valid_events
     test_loss = test_epoch_loss / test_events
 
+    train_losses.append(train_loss)
+    validation_losses.append(valid_loss)
     # type_emb = model.encoder.type_emb.weight * math.sqrt(model.d_model)
     # length_scale = model.encoder.kernel.params(type_emb)[0]['length_scale']
     length_scale = F.softplus(model.encoder.kernel.lengthscale).item()
     alpha = 1
     # sigma = F.softplus(model.encoder.kernel.sigma).item()
-    sigma = F.sigmoid(model.encoder.kernel.sigma).item()
+    sigma = 1
+    l =  F.softplus(model.encoder.sigmoid.l).item()
+    s = 1
+    b = F.softplus(model.encoder.sigmoid.b).item() +1
     # if params.kernel_type == 1:
     #     alpha = 'NAN'
     # else:
     #     alpha = model.encoder.kernel.params(type_emb)[0]['alpha']
         # alpha = params.alpha
-    # with open('log.txt', 'a') as f:
-    #     f.write('{epoch}, {loss: 8.5f}, {rmse_all: 8.5f}, {rmse_last: 8.5f}, {length_scale: 8.5f}\n'
-    #             .format(epoch=epoch, loss=valid_loss, rmse_all=val_RMSE, rmse_last=val_RMSE,length_scale =length_scale ))
+    with open(log_name, 'a') as f:
+        f.write('{epoch}, {train_loss: 10.8f}, {validation_loss: 10.8f}, {l: 10.8f},{length_scale: 10.8f}\n'
+                .format(epoch=epoch, train_loss=train_loss, validation_loss=valid_loss, l=l, length_scale=length_scale))
 
-    print(f'Epoch:{epoch}, Train Loss:{train_loss:.4f}, Valid Loss:{valid_loss:.4f}, Test Loss:{test_loss:.4f}')
-    print(f' Valid Last Event RMSE:{val_RMSE:.4f}, Test Last Event RMSE:{test_RMSE:.4f}')
-    print(f' Valid All Event RMSE:{val_all_RMSE:.4f}, Test All Event RMSE:{test_all_RMSE:.4f}')
+    print(f'Epoch:{epoch}, Train Loss:{train_loss:.6f}, Valid Loss:{valid_loss:.6f}, Test Loss:{test_loss:.6f}')
+    # print(f' Valid Last Event RMSE:{val_RMSE:.4f}, Test Last Event RMSE:{test_RMSE:.4f}')
+    # print(f' Valid All Event RMSE:{val_all_RMSE:.4f}, Test All Event RMSE:{test_all_RMSE:.4f}')
+    print(f'b:{b}')
 
-    print(f'Lengthscale:{length_scale},alpha:{alpha},sigma:{sigma}')
+    # print(f'Lengthscale:{length_scale},alpha:{alpha},sigma:{sigma}')
+    # print(f'l:{l},s:{s}')
 
+    parameters.append([l,length_scale])
+
+min_val_loss_index = np.argmin(validation_losses)
+print(f' Min Val Loss:{min(validation_losses)},Best Params: l:{parameters[min_val_loss_index][0]}, lengthscale:{parameters[min_val_loss_index][1]}')
 # print(f' Valid Last Event RMSE:{val_RMSE:.4f}, Test Last Event RMSE:{test_RMSE:.4f}')
 # print(f' Valid All Event RMSE:{val_all_RMSE:.4f}, Test All Event RMSE:{test_all_RMSE:.4f}')
 
@@ -193,10 +208,14 @@ results_to_record = [str(params.data), str(params.epoch), str(params.batch_size)
                      str(test_loss.item()),str(val_all_RMSE.item()),
                      str(test_all_RMSE.item()), str(val_RMSE.item()),
                      str(test_RMSE.item()),
-                     str(length_scale), str(alpha),str(params.softmax),
-                     str(params.embed_time),str(params.timetovec),str(params.p_norm),str(sigma)]
+                     str(length_scale), str(alpha),str(l),str(s),str(params.softmax),
+                     str(params.timetovec),str(params.p_norm)]
 
-with open(r'results.csv', 'a', newline='') as f:
+# with open(r'results.csv', 'a', newline='') as f:
+#     writer = csv.writer(f)
+#     writer.writerow(results_to_record)
+
+with open(r'param_tuning_results.csv', 'a', newline='') as f:
     writer = csv.writer(f)
     writer.writerow(results_to_record)
 

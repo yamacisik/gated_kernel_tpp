@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from sahp import one_hot_embedding
 import math
 import sys
 
@@ -42,52 +43,19 @@ class gated_tpp(nn.Module):
         sampled_times = sampled_arrival_times[:, :-1]
         ## Check the loss
 
-        loss = torch.abs(arrival_times - sampled_times)
-        # loss = (arrival_times - sampled_times)**2
+        # loss = torch.abs(arrival_times - sampled_times)
+        loss = (arrival_times - sampled_times)**2
         batch_lengths = (batch_types != 0).sum(-1).to('cpu')  ## Non events are 0
         batch_loss = nn.utils.rnn.pack_padded_sequence(loss.T, batch_lengths - 1, enforce_sorted=False)[0]
         time_loss = batch_loss.sum()
 
-        ##ll_loss
-        # n_batch = batch_arrival_times.size(0)
-        # n_times = batch_arrival_times.size(1)
-        #
-        #
-        #
-        # intens_at_evs = hidden
-        # log_intensities = intens_at_evs.log().sum(-1)
-        # log_intensities = nn.utils.rnn.pack_padded_sequence(log_intensities.T, batch_lengths , enforce_sorted=False)[0]
-        # log_intensities =log_intensities.sum()
-        #
-        #
-        # taus = torch.rand(n_batch, n_times, 5).to(batch_arrival_times.device) * batch_arrival_times[:, :, None]
-        # taus = torch.cat([torch.zeros(n_batch, 1).to(batch_arrival_times.device), times], dim=-1)[:, :-1][:, :, None] + taus
-        # sample_size = taus.size()[1] * taus.size()[2]
-        # taus = taus.reshape(n_batch, sample_size)
-        # tau_type = torch.ones(taus.size()).int().to(batch_arrival_times.device)
-        # sample_intensities, _, _ = self.encoder(tau_type, taus, taus)
-        # sample_intensities =sample_intensities.sum(-1)
-        #
-        # dt_taus = taus[:, 1:] - taus[:, :-1]
-        # sample_integral = (dt_taus * (sample_intensities[:,1:] + sample_intensities[:,:-1])/2).sum(-1)
-        # integral_loss = sample_integral.sum()
+        seq_onehot_types = batch_types -1
+        seq_onehot_types[seq_onehot_types < 0] = self.num_types
+        seq_onehot_types = one_hot_embedding(seq_onehot_types, self.num_types + 1)
 
-        ## Add Param Regularizer 1-D
-        # type_emb = self.encoder.type_emb.weight * math.sqrt(self.d_model)
-        # param_size = 0
-        # for space in type_emb[1:]:
-        #     param_size += torch.abs(self.encoder.kernel.alpha[0](space))
-        # param_size = -param_size.sum()
-        # loss = time_loss + reg_param * param_size
+        self.decoder.GAN._calculate_loss(batch_arrival_times, seq_onehot_types, n_mc_samples = 20)
 
-        # time_0 = torch.zeros(times.size()).to(times.device)
-        # enc_0 = self.encoder.embedding(batch_types,time_0)
-        # embedding_distances =torch.abs(self.encoder.embedding(batch_types,times) -enc_0 ).sum(dim=-1)
-        # time_distances = torch.abs(times - time_0)
-        # linearity_loss = torch.abs(embedding_distances -time_distances)**2
-        # linearity_loss = nn.utils.rnn.pack_padded_sequence(linearity_loss.T, batch_lengths - 1, enforce_sorted=False)[0]
-        # linearity_loss = linearity_loss.sum()
-        # print(linearity_loss)
+
 
         return time_loss
 
@@ -205,8 +173,8 @@ class Encoder(nn.Module):
             0), type_embedding.size(1), type_embedding.size(1), type_embedding.size(-1))
         xd = xd_bar.transpose(1, 2)
 
-        # scores = self.kernel((xt, xt_bar), (xd, xd_bar)) * (self.sigmoid((xt, xt_bar), (xd, xd_bar)))
-        scores = self.kernel((xt, xt_bar), (xd - xd_bar))
+        scores = self.kernel((xt, xt_bar), (xd, xd_bar)) * (self.sigmoid((xt, xt_bar), (xd, xd_bar)))
+        # scores = self.kernel((xt, xt_bar), (xd - xd_bar))
         if self.softmax:
             scores = scores.masked_fill_(subsequent_mask == 0, value=-1e5)
             scores = F.softmax(scores, dim=-1)
@@ -228,7 +196,10 @@ class Decoder(nn.Module):
 
         self.d_model = d_model
         self.num_types = num_types
-        self.GAN = GenerativeAdversarialNetwork(num_types, d_model, dropout)
+        # self.GAN = GenerativeAdversarialNetwork(num_types, d_model, dropout)
+
+        self.GAN = Intensity_Function(num_types, d_model)
+
 
     def forward(self, hidden, temp_encoding=None):
 
@@ -342,3 +313,100 @@ class TimetoVec(nn.Module):
         return t2v
 
         return t2v
+
+class Intensity_Function(nn.Module):
+
+    def __init__(self,
+                 num_types, d_model):
+        super().__init__()
+
+        self.d_model = d_model
+        self.num_types = num_types
+        self.input_size = num_types + 1
+        self.gelu  = GELU()
+
+        self.start_layer = nn.Sequential(
+            nn.Linear(self.d_model, self.d_model, bias=True),
+            self.gelu
+        )
+
+
+        self.converge_layer = nn.Sequential(
+            nn.Linear(self.d_model, self.d_model, bias=True),
+            self.gelu
+        )
+
+        self.decay_layer = nn.Sequential(
+            nn.Linear(self.d_model, self.d_model, bias=True)
+            , nn.Softplus(beta=10.0)
+        )
+
+        self.intensity_layer = nn.Sequential(
+            nn.Linear(self.d_model, self.num_types, bias=True)
+            , nn.Softplus(beta=1.)
+        )
+
+    def forward(self,embed_info):
+
+        self.start_point = self.start_layer(embed_info)
+        self.converge_point = self.converge_layer(embed_info)
+        self.omega = self.decay_layer(embed_info)
+
+
+
+    def state_decay(self, converge_point, start_point, omega, duration_t):
+        # * element-wise product
+        cell_t = torch.tanh(converge_point + (start_point - converge_point) * torch.exp(- omega * duration_t))
+        return cell_t
+
+
+    def _compute_loss(self,dt_seq, seq_onehot_types, n_mc_samples=20):
+
+        cell_t = self.state_decay(self.converge_point, self.start_point, self.omega, dt_seq[:, :, None])
+        n_batch = dt_seq.size(0)
+        n_times = dt_seq.size(1) - 1
+        device = dt_seq.device
+        # Get the intensity process
+        intens_at_evs = self.intensity_layer(cell_t)
+        # print(intens_at_evs.shape)
+        # intens_at_evs = nn.utils.rnn.pad_sequence(
+        #     intens_at_evs, padding_value=1.0, batch_first=True)  # pad with 0 to get rid of the non-events, log1=0
+
+        log_intensities = intens_at_evs.log()  # log intensities
+        log_intensities = log_intensities * seq_onehot_types.sum(dim=-1).unsqueeze(-1)
+
+        seq_mask = seq_onehot_types[0,:,:-1]!=0
+        log_sum = (log_intensities * seq_mask).sum(dim=(2, 1))  # shape batch
+
+        taus = torch.rand(n_batch, n_times, 1, n_mc_samples).to(device)  # self.process_dim replaced 1
+        taus = dt_seq[:, :, None, None] * taus  # inter-event times samples)
+
+        cell_tau = self.state_decay(
+            self.converge_point[:, :, :, None],
+            self.start_point[:, :, :, None],
+            self.omega[:, :, :, None],
+            taus)
+        cell_tau = cell_tau.transpose(2, 3)
+        intens_at_samples = self.intensity_layer(cell_tau).transpose(2, 3)
+        # intens_at_samples = nn.utils.rnn.pad_sequence(
+        #     intens_at_samples, padding_value=0.0, batch_first=True)
+
+        intens_at_samples = intens_at_samples * seq_onehot_types.sum(dim=-1).unsqueeze(-1).unsqueeze(-1)
+
+        total_intens_samples = intens_at_samples.sum(dim=2)  # shape batch * N * MC
+        partial_integrals = dt_seq * total_intens_samples.mean(dim=2)
+
+        integral_ = partial_integrals.sum(dim=1)
+
+        res = torch.sum(- log_sum + integral_)
+        return res
+
+
+
+class GELU(nn.Module):
+    """
+    Paper Section 3.4, last paragraph notice that BERT used the GELU instead of RELU
+    """
+
+    def forward(self, x):
+        return 0.5 * x * (1 + torch.tanh(math.sqrt(2 / math.pi) * (x + 0.044715 * torch.pow(x, 3))))
