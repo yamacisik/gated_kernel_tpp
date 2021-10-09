@@ -397,7 +397,7 @@ def get_sample_intensities(kernel, batch, device='cpu', embeddings=None):
 
     event_time, arrival_time, event_type, _ = map(lambda x: x.to(device), batch)
 
-    xt_bar, xt = get_pairwise_times(event_type, event_time)
+    xt_bar, xt = get_pairwise_times(event_time)
     t_diff = torch.abs(xt_bar - xt)
     n_batch = t_diff.size()[0]
     length_batch = t_diff.size()[1]
@@ -419,12 +419,45 @@ def get_sample_intensities(kernel, batch, device='cpu', embeddings=None):
         base_intensity = kernel.base_intensity(embeddings).squeeze(-1)
 
     subsequent_mask = get_subsequent_mask(event_type)
-    intensities = scores.masked_fill_(subsequent_mask == 0, value=0).sum(-1)
+    sample_intensities = scores.masked_fill_(subsequent_mask == 0, value=0).sum(-1)
 
     sample_intensities = scores.sum(-1) - scores_0
     seq_length_mask = (event_type != 0) * 1
 
     return (sample_intensities + base_intensity) * seq_length_mask
+
+
+def get_non_event_intensities(kernel, batch,sample_intensities, device='cpu', embeddings=None,mc_sample_size = 5):
+
+    event_time, arrival_time, event_type, _ = map(lambda x: x.to(device), batch)
+
+    sample_arrival_time = arrival_time[:, 1:]
+    sample_event_time = event_time[:, :-1]
+    t_last = sample_arrival_time.max(-1)[0]
+    n_batch = sample_arrival_time.size(0)
+    n_t = sample_arrival_time.size(1)
+
+    mc_values = torch.rand((n_batch, n_t, mc_sample_size)).to(device) * \
+                sample_arrival_time.unsqueeze(-1) + event_time[:-1].unsqueeze(-1)
+
+    samples = sample_event_time.unsqueeze(-1).expand((n_batch, n_t, mc_sample_size))
+    samples = samples.unsqueeze(1).expand(samples.size(
+        0), samples.size(1), samples.size(1), samples.size(-1))
+
+    mc_values_bar = mc_values.unsqueeze(1).expand(mc_values.size(
+        0), mc_values.size(1), mc_values.size(1), mc_values.size(-1))
+
+    mc_values_bar = mc_values_bar.transpose(1, 2)
+    d = torch.abs((mc_values_bar - samples))
+
+
+    if kernel.num_types == 1:
+        non_event_intensities = kernel(d)
+        trigger_integral = non_event_intensities.mean(-1)
+        subsequent_mask = get_subsequent_mask(event_type[:, 1:])
+        integral = trigger_integral * subsequent_mask
+        integral = integral.sum(-1)
+
 
 
 def get_subsequent_mask(seq):
