@@ -345,12 +345,12 @@ class magic_kernel(nn.Module):
             self.alpha = torch.nn.Parameter(torch.randn(1))
 
         else:
-            self.lengthscale = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Softplus())
-            self.alpha = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Sigmoid())
+            self.lengthscale = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Softplus(beta = 10))
+            self.alpha = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Softplus(beta = 10))
             self.sigma = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Softplus())
             self.base_intensity = nn.Sequential(nn.Linear(d_type, 1, bias=False), nn.Softplus())
 
-    def forward(self, time_diff, combined_embeddings=None):
+    def forward(self, time_diff, combined_embeddings=None,non_event_intensity = False):
 
         d = time_diff
 
@@ -362,10 +362,18 @@ class magic_kernel(nn.Module):
             base_intensity = F.softplus(self.base_intensity)
 
         else:
-            lengthscale = self.lengthscale(combined_embeddings).squeeze(-1)
-            # sigma = self.sigma(combined_embeddings).squeeze(-1)
-            sigma = 1
-            alpha = self.alpha(combined_embeddings).squeeze(-1)
+            if not non_event_intensity:
+                lengthscale = self.lengthscale(combined_embeddings).squeeze(-1)
+                # sigma = self.sigma(combined_embeddings).squeeze(-1)
+                alpha = self.alpha(combined_embeddings).squeeze(-1)
+                sigma = 1
+
+            else:
+                lengthscale = self.lengthscale(combined_embeddings)
+                # sigma = self.sigma(combined_embeddings).squeeze(-1)
+                alpha = self.alpha(combined_embeddings)
+                sigma = 1
+
             base_intensity = self.base_intensity(combined_embeddings[:, :, :, self.d_type:]).squeeze(-1)
 
         # (sigma ** 2) * (1 + (d ** 2) / (self.alpha * lengthscale ** 2)) ** (-self.alpha)
@@ -429,7 +437,7 @@ def get_sample_intensities(kernel, batch, device='cpu', embeddings=None):
     return (sample_intensities + base_intensity) * seq_length_mask
 
 
-def get_non_event_intensities(kernel, batch,embeddings=None, device='cpu',mc_sample_size = 5):
+def get_non_event_intensities(kernel, batch,type_embeddings=None, device='cpu',mc_sample_size = 5):
 
     event_time, arrival_time, event_type, _ = map(lambda x: x.to(device), batch)
 
@@ -440,7 +448,7 @@ def get_non_event_intensities(kernel, batch,embeddings=None, device='cpu',mc_sam
     n_t = sample_arrival_time.size(1)
 
     mc_values = torch.rand((n_batch, n_t, mc_sample_size)).to(device) * \
-                sample_arrival_time.unsqueeze(-1) + event_time[:-1].unsqueeze(-1)
+                sample_arrival_time.unsqueeze(-1) + sample_event_time.unsqueeze(-1)
 
     samples = sample_event_time.unsqueeze(-1).expand((n_batch, n_t, mc_sample_size))
     samples = samples.unsqueeze(1).expand(samples.size(
@@ -463,12 +471,30 @@ def get_non_event_intensities(kernel, batch,embeddings=None, device='cpu',mc_sam
         seq_length_mask = (event_type[:, 1:] != 0) * 1
         integral = integral * seq_length_mask
         base_intensity = F.softplus(kernel.base_intensity, beta=1)
-
+        sequence_integral =integral.sum(-1)+base_intensity*t_last
     else:
-        pass
+        sequence_integral = 0
+        for i in range(kernel.num_types):
+            sample_event_types = event_type[:, 1:]
+            sample_embeddings = type_embeddings(sample_event_types)
+            xd_bar = sample_embeddings.unsqueeze(1).expand(sample_embeddings.size(
+                0), sample_embeddings.size(1), sample_embeddings.size(1), sample_embeddings.size(-1))
 
+            current_embedding = type_embeddings(torch.tensor([i]))
+            current_embedding = current_embedding[:, None, None:].expand(xd_bar.size()).transpose(1, 2)
+            combined_embeddings = torch.cat([xd_bar, current_embedding], dim=-1)
 
+            non_event_intensities = kernel(d, combined_embeddings, non_event_intensity=True)
+            trigger_integral = non_event_intensities.mean(-1)
+            subsequent_mask = get_subsequent_mask(sample_event_types)
+            integral = trigger_integral * subsequent_mask
+            integral = integral.sum(-1)
+            seq_length_mask = (event_type[:, 1:] != 0) * 1
+            integral = integral * seq_length_mask
+            base_intensity = kernel.base_intensity(type_embeddings(torch.tensor([i])))
+            sequence_integral += integral.sum(-1) + base_intensity * t_last
 
+    return sequence_integral
 
 def get_subsequent_mask(seq):
     """ For masking out the subsequent info, i.e., masked self-attention. """

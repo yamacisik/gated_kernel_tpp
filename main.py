@@ -205,8 +205,8 @@ if num_types>1:
     combined_embeddings = torch.cat([xd_bar, xd], dim=-1)
 
     lengthscales = model.encoder.kernel.lengthscale(combined_embeddings).cpu().detach().numpy().flatten().tolist()
-    alphas = model.encoder.kernel.sigma(combined_embeddings).cpu().detach().numpy().flatten().tolist()
-    sigmas = model.encoder.kernel.alpha(combined_embeddings).cpu().detach().numpy().flatten().tolist()
+    alphas = model.encoder.kernel.alpha(combined_embeddings).cpu().detach().numpy().flatten().tolist()
+    sigmas = model.encoder.kernel.sigma(combined_embeddings).cpu().detach().numpy().flatten().tolist()
 else:
     lengthscales= [F.softplus(model.encoder.kernel.lengthscale).item() for i in range(num_types**2)]
     alphas = [F.softplus(model.encoder.kernel.alpha).item() for i in range(num_types**2)]
@@ -214,7 +214,7 @@ else:
 
 model_name =secrets.token_hex(5)
 
-params_to_record = lengthscales +alphas +sigmas
+params_to_record = lengthscales +sigmas +alphas
 params_to_record = [str(model_name)] +params_to_record
 results_to_record = [str(params.data), str(params.epoch), str(params.batch_size), str(params.d_model),
                      str(params.d_type), str(params.lr), str(train_loss.item()), str(valid_loss.item()),
