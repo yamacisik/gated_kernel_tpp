@@ -347,7 +347,7 @@ class magic_kernel(nn.Module):
         else:
             self.lengthscale = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Softplus(beta = 10))
             self.alpha = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Softplus(beta = 1))
-            self.sigma = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Softplus())
+            self.sigma = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Sigmoid())
             self.base_intensity = nn.Sequential(nn.Linear(d_type, 1, bias=False), nn.Softplus())
 
     def forward(self, time_diff, combined_embeddings=None,non_event_intensity = False):
@@ -364,15 +364,13 @@ class magic_kernel(nn.Module):
         else:
             if not non_event_intensity:
                 lengthscale = self.lengthscale(combined_embeddings).squeeze(-1)
-                # sigma = self.sigma(combined_embeddings).squeeze(-1)
+                sigma = self.sigma(combined_embeddings).squeeze(-1)
                 alpha = self.alpha(combined_embeddings).squeeze(-1)
-                sigma = 1
 
             else:
                 lengthscale = self.lengthscale(combined_embeddings)
-                # sigma = self.sigma(combined_embeddings).squeeze(-1)
+                sigma = self.sigma(combined_embeddings).squeeze(-1)
                 alpha = self.alpha(combined_embeddings)
-                sigma = 1
 
             base_intensity = self.base_intensity(combined_embeddings[:, :, :, self.d_type:]).squeeze(-1)
 
