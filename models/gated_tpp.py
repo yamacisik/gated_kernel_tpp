@@ -172,7 +172,11 @@ class Encoder(nn.Module):
         xt_bar, xt = get_pairwise_times(event_time)
         t_diff = torch.abs(xt_bar - xt)
         ## Scale the embedding with the hidden vector size
-        hidden_vector  = temp_enc +type_embedding
+        if self.num_types ==1:
+            hidden_vector = temp_enc
+        else:
+            hidden_vector  = temp_enc +type_embedding
+
         ## Future Masking
         subsequent_mask = get_subsequent_mask(event_type)
 
