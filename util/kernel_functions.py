@@ -366,7 +366,11 @@ class magic_kernel(nn.Module):
             alpha = self.alpha(combined_embeddings).squeeze(-1)
             base_intensity = self.base_intensity(combined_embeddings[:, :, :, self.d_type:]).squeeze(-1)
 
+        # (sigma ** 2) * (1 + (d ** 2) / (self.alpha * lengthscale ** 2)) ** (-self.alpha)
+        #
+        # (sigma ** 2) * (1 + (d ** 2) / (self.alpha * lengthscale ** 2)) ** (-self.alpha) *((1 + torch.exp(-d)) ** -alpha)
         self.scores = sigma * torch.exp(-d / lengthscale) * ((1 + torch.exp(-d)) ** -alpha)
+        # self.scores = (sigma ** 2) * (1 + (d ** 2) / (1 * lengthscale ** 2)) ** (-1) *((1 + torch.exp(-d)) ** -alpha)
 
         return self.scores
 

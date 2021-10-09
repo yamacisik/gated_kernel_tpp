@@ -48,20 +48,23 @@ class gated_tpp(nn.Module):
         batch_loss = loss*seq_length_mask
         time_loss = batch_loss.sum()
 
-        non_event_mask_prob = torch.zeros((batch_probs.size(0),batch_probs.size(1),1)).to(batch_arrival_times.device)
+        non_event_mask_prob = torch.ones((batch_probs.size(0),batch_probs.size(1),1)).to(batch_arrival_times.device)
         probs = torch.cat([non_event_mask_prob,batch_probs],dim = -1)
         one_hot_encodings = one_hot_embedding(batch_types[:, 1:],self.num_types+1)
 
-        cross_entropy_loss =-(one_hot_encodings*torch.log(probs[:,1:,:])).sum(-1)
-        cross_entropy_loss = loss * seq_length_mask
+        # print(one_hot_encodings*torch.log(probs[:,:-1,:]))
+        cross_entropy_loss =-(one_hot_encodings*torch.log(probs[:,:-1,:])).sum(-1)
+        cross_entropy_loss = cross_entropy_loss * seq_length_mask
         mark_loss = cross_entropy_loss.sum()
         # seq_onehot_types = batch_types -1
         # seq_onehot_types[seq_onehot_types < 0] = self.num_types
         # seq_onehot_types = one_hot_embedding(seq_onehot_types, self.num_types + 1)
         #
         # loss = self.decoder.GAN._compute_loss(batch_arrival_times, seq_onehot_types, n_mc_samples = 20)
+        # print(mark_loss)
+        # print(time_loss)
 
-        return time_loss +mark_loss
+        return time_loss+mark_loss
 
     def train_epoch(self, dataloader, optimizer, params):
 
@@ -88,6 +91,7 @@ class gated_tpp(nn.Module):
         with torch.no_grad():
             last_errors = []
             all_errors = []
+            accuracy = 0
             for batch in dataloader:
                 event_time, arrival_time, event_type, _ = map(lambda x: x.to(device), batch)
                 predicted_times,probs = self(event_type, event_time, arrival_time)
@@ -101,15 +105,15 @@ class gated_tpp(nn.Module):
                 errors = predicted_times[:, :-1] - arrival_time[:, 1:]
                 seq_index = 0
 
-                predicted_events = torch.argmax(probs,dim = -1)
+
+                predicted_events = torch.argmax(probs,dim = -1)+1 ## Events go from 1 to N in the dataset
+                # print(predicted_events[:, :-1])
                 type_prediction_hits = (predicted_events[:, :-1] ==event_type[:, 1:])*1
 
-
-                accuracy = 0
                 for idx in last_event_index:
                     last_errors.append(errors[seq_index][idx].unsqueeze(-1))
                     all_errors.append(errors[seq_index][:idx + 1])
-                    accuracy+=type_prediction_hits[seq_index][:idx + 1].item()
+                    accuracy+=type_prediction_hits[seq_index][idx].item()
 
             last_errors = torch.cat(last_errors)
             last_RMSE = (last_errors ** 2).mean().sqrt()
@@ -137,14 +141,14 @@ class Encoder(nn.Module):
             self.embedding = BiasedPositionalEmbedding(d_model, max_len=4096)
         # self.embedding = nn.Embedding(num_types + 1, d_model, padding_idx=0)
         self.type_emb = nn.Embedding(num_types + 1, d_type, padding_idx=0)
+        # self.type_emb_prediction = nn.Embedding(num_types + 1, d_type, padding_idx=0)
 
         # self.w_k = torch.tensor([math.pow(10000.0, 2.0 * (i) / d_model) for i in range(d_model)])
 
         self.w_k = torch.tensor([math.pow(10000.0, 2.0 * ((i // 2) + 1) / d_model) for i in range(d_model)])
         self.sigmoid = kernel_functions.SigmoidGate(num_types, d_type, norm=1, l=l, s=s)
         # self.kernel = getattr(kernel_functions, kernel_type +'_kernel')(num_types, d_type, norm=1)
-        self.kernel = kernel_functions.rational_quadratic_kernel(num_types, d_type, alpha=alpha,
-                                                                 lengthscale=length_scale, p=p,sigma=sigma)
+        self.kernel = kernel_functions.magic_kernel(num_types, d_type)
         self.softmax = test_softmax
         self.embed_time = embed_time
 
@@ -168,7 +172,7 @@ class Encoder(nn.Module):
         xt_bar, xt = get_pairwise_times(event_time)
         t_diff = torch.abs(xt_bar - xt)
         ## Scale the embedding with the hidden vector size
-        hidden_vector  = type_embedding +type_embedding
+        hidden_vector  = temp_enc +type_embedding
         ## Future Masking
         subsequent_mask = get_subsequent_mask(event_type)
 
@@ -224,13 +228,14 @@ class GenerativeAdversarialNetwork(nn.Module):
         self.noise_weights = nn.ModuleList([nn.Linear(d_model, d_model, bias=False) for i in range(layers)])
 
         self.event_time_calculator = nn.Linear(d_model, 1, bias=False)
-        self.event_type_predictor = nn.Sequential(nn.Linear(d_model, d_model, bias=False), nn.ReLU(),
-                                                  nn.Linear(d_model, num_types, bias=False))
+        self.event_type_predictor = nn.Sequential(nn.Linear(d_model, num_types, bias=False))
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, hidden):
         b_n, s_n, h_n = hidden.size()
         sample = self.samples
+
+        mark_probs = F.softmax(self.event_type_predictor(hidden), -1)
 
         for i in range(self.layers):
             noise = torch.rand((b_n, s_n, sample, h_n), device=hidden.device)
@@ -247,7 +252,7 @@ class GenerativeAdversarialNetwork(nn.Module):
         mean = nn.functional.softplus(self.event_time_calculator(hidden)).squeeze(-1).mean(-1)
         std = nn.functional.softplus(self.event_time_calculator(hidden)).squeeze(-1).std(-1)
 
-        mark_probs = F.softmax(self.event_type_predictor(hidden),-1).mean(-2)
+
 
 
 

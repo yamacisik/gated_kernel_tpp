@@ -8,6 +8,7 @@ import torch.optim as optim
 from datetime import datetime
 import csv
 import math
+import secrets
 
 model_name = str(datetime.now())[:19].replace(':', '_').replace(' ', '_').replace('-', '_')
 
@@ -25,7 +26,7 @@ MODELS = {1: 'gated_TPP', 2: 'LogNormMix'}
 from dataset import get_dataloader
 from tqdm import tqdm
 import random
-from models.gated_tpp import gated_tpp,count_parameters
+from models.gated_tpp import gated_tpp,count_parameters,get_pairwise_type_embeddings
 import torch.nn.functional as F
 
 parser = argparse.ArgumentParser()
@@ -110,8 +111,8 @@ if not params.normalize:
     t_max = 1
 
 trainloader = get_dataloader(train_data, params.batch_size, shuffle=True,t_max = t_max)
-testloader = get_dataloader(test_data, params.batch_size, shuffle=False,t_max = t_max)  # 1 makes it easy to calculate RMSE
-valloader = get_dataloader(dev_data, params.batch_size, shuffle=False,t_max = t_max)
+testloader = get_dataloader(test_data, 1, shuffle=False,t_max = t_max)  # 1 makes it easy to calculate RMSE
+valloader = get_dataloader(dev_data, 1, shuffle=False,t_max = t_max)
 valid_events = 0
 test_events = 0
 train_events = 0
@@ -191,45 +192,46 @@ for epoch in range(params.epoch):
 
     print(f'Epoch:{epoch}, Train Loss:{train_loss:.6f}, Valid Loss:{valid_loss:.6f}, Test Loss:{test_loss:.6f}')
     print(f' Valid Last Event RMSE:{val_RMSE:.4f}, Test Last Event RMSE:{test_RMSE:.4f},')
-    print(f' Valid Event Accuracy:{val_accuracy}, Valid Event Accuracy:{test_accuracy} /n')
-
-    # print(f' Valid All Event RMSE:{val_all_RMSE:.4f}, Test All Event RMSE:{test_all_RMSE:.4f}/n')
-    # print(f'b:{b},l:{l},s:{s},lengthscale:{length_scale}')
-
-    # print(f'Lengthscale:{length_scale},alpha:{alpha},sigma:{sigma}')
-    # print(f'l:{l},s:{s}')
-
-    # parameters.append([l,length_scale])
-
-# min_val_loss_index = np.argmin(validation_losses)
-# print(f' Min Val Loss:{min(validation_losses)}')
-# print(f' Valid Last Event RMSE:{val_RMSE:.4f}, Test Last Event RMSE:{test_RMSE:.4f}')
-# print(f' Valid All Event RMSE:{val_all_RMSE:.4f}, Test All Event RMSE:{test_all_RMSE:.4f}')
-
-# if params.kernel_type == 1:
-#     alpha = 'NAN'
-# else:
-#     alpha = params.alpha
+    print(f' Valid Event Accuracy:{val_accuracy}, Test Event Accuracy:{test_accuracy} \n')
 
 
-# length_scale = params.length_scale
+
+num_types = DATASET_EVENT_TYPES[params.data]
+if num_types>1:
+    events = torch.tensor([range(1,num_types+1)]).to(params.device)
+    embeddings = model.encoder.type_emb(events)
+    print(embeddings.shape)
+    xd_bar, xd = get_pairwise_type_embeddings(embeddings)
+    combined_embeddings = torch.cat([xd_bar, xd], dim=-1)
+
+    lengthscales = model.encoder.kernel.lengthscale(combined_embeddings).cpu().detach().numpy().flatten().tolist()
+    alphas = model.encoder.kernel.sigma(combined_embeddings).cpu().detach().numpy().flatten().tolist()
+    sigmas = model.encoder.kernel.alpha(combined_embeddings).cpu().detach().numpy().flatten().tolist()
+else:
+    lengthscales= [F.softplus(model.encoder.kernel.lengthscale().item()) for i in range(num_types**2)]
+    alphas = [F.softplus(model.encoder.kernel.alpha().item()) for i in range(num_types**2)]
+    sigmas = [F.softplus(model.encoder.kernel.sigma().item()) for i in range(num_types**2)]
+
+model_name =secrets.token_hex(5)
+
+params_to_record = lengthscales +alphas +sigmas
+params_to_record = [str(model_name)] +params_to_record
 results_to_record = [str(params.data), str(params.epoch), str(params.batch_size), str(params.d_model),
                      str(params.d_type), str(params.lr), str(train_loss.item()), str(valid_loss.item()),
                      str(test_loss.item()),str(val_all_RMSE.item()),
                      str(test_all_RMSE.item()), str(val_RMSE.item()),
-                     str(test_RMSE.item()),
-                     str(length_scale), str(alpha),str(l),str(s),str(params.softmax),
-                     str(params.timetovec),str(params.p_norm)]
+                     str(test_RMSE.item()),str(val_accuracy),str(test_accuracy),str(params.softmax),
+                     str(params.timetovec),str(model_name)]
 
-# with open(r'results.csv', 'a', newline='') as f:
-#     writer = csv.writer(f)
-#     writer.writerow(results_to_record)
-
-with open(r'param_tuning_results.csv', 'a', newline='') as f:
+with open(r'results.csv', 'a', newline='') as f:
     writer = csv.writer(f)
     writer.writerow(results_to_record)
 
-model_name = params.data + 'debug_model'
+with open(r'learned_params.csv', 'a', newline='') as f:
+    writer = csv.writer(f)
+    writer.writerow(params_to_record)
+
+# model_name = params.data + 'debug_model'
 if params.save:
-    torch.save(model.state_dict(), 'trained_models/' + modelname + '.pt')
+    torch.save(model.state_dict(), 'trained_models/' + model_name + '.pt')
 
