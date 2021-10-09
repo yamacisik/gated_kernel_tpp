@@ -150,11 +150,11 @@ for p in model.parameters():
 if params.timetovec:
     stated_dict = torch.load('trained_embeddings/timetovec' +str(params.d_model)+  '.pt')
     model.encoder.embedding.load_state_dict(stated_dict)
-
-
-log_name = 'training_logs/'+modelname+'_log.txt'
-with open(log_name, 'w') as f:
-    f.write('Epoch, train_loss, validation_loss,s,length_scale\n')
+#
+#
+# log_name = 'training_logs/'+modelname+'_log.txt'
+# with open(log_name, 'w') as f:
+#     f.write('Epoch, train_loss, validation_loss,s,length_scale\n')
 
 train_losses = []
 validation_losses = []
