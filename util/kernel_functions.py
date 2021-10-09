@@ -369,7 +369,7 @@ class magic_kernel(nn.Module):
 
             else:
                 lengthscale = self.lengthscale(combined_embeddings)
-                sigma = self.sigma(combined_embeddings).squeeze(-1)
+                sigma = self.sigma(combined_embeddings)
                 alpha = self.alpha(combined_embeddings)
 
             base_intensity = self.base_intensity(combined_embeddings[:, :, :, self.d_type:]).squeeze(-1)
