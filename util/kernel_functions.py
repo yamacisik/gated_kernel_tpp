@@ -356,13 +356,15 @@ class magic_kernel(nn.Module):
 
         if self.num_types == 1:
             lengthscale = F.softplus(self.lengthscale)
-            sigma = F.softplus(self.sigma)
+            # sigma = F.softplus(self.sigma)
+            sigma = 1
             alpha = F.softplus(self.alpha)
             base_intensity = F.softplus(self.base_intensity)
 
         else:
             lengthscale = self.lengthscale(combined_embeddings).squeeze(-1)
-            sigma = self.sigma(combined_embeddings).squeeze(-1)
+            # sigma = self.sigma(combined_embeddings).squeeze(-1)
+            sigma = 1
             alpha = self.alpha(combined_embeddings).squeeze(-1)
             base_intensity = self.base_intensity(combined_embeddings[:, :, :, self.d_type:]).squeeze(-1)
 
@@ -427,13 +429,13 @@ def get_sample_intensities(kernel, batch, device='cpu', embeddings=None):
     return (sample_intensities + base_intensity) * seq_length_mask
 
 
-def get_non_event_intensities(kernel, batch,sample_intensities, device='cpu', embeddings=None,mc_sample_size = 5):
+def get_non_event_intensities(kernel, batch,embeddings=None, device='cpu',mc_sample_size = 5):
 
     event_time, arrival_time, event_type, _ = map(lambda x: x.to(device), batch)
 
     sample_arrival_time = arrival_time[:, 1:]
     sample_event_time = event_time[:, :-1]
-    t_last = sample_arrival_time.max(-1)[0]
+    t_last = sample_event_time.max(-1)[0]
     n_batch = sample_arrival_time.size(0)
     n_t = sample_arrival_time.size(1)
 
@@ -452,11 +454,19 @@ def get_non_event_intensities(kernel, batch,sample_intensities, device='cpu', em
 
 
     if kernel.num_types == 1:
+
         non_event_intensities = kernel(d)
         trigger_integral = non_event_intensities.mean(-1)
         subsequent_mask = get_subsequent_mask(event_type[:, 1:])
         integral = trigger_integral * subsequent_mask
         integral = integral.sum(-1)
+        seq_length_mask = (event_type[:, 1:] != 0) * 1
+        integral = integral * seq_length_mask
+        base_intensity = F.softplus(kernel.base_intensity, beta=1)
+
+    else:
+        pass
+
 
 
 
