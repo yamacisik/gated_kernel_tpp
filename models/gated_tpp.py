@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from sahp import one_hot_embedding
 import math
 import sys
 
@@ -36,28 +35,33 @@ class gated_tpp(nn.Module):
 
         hidden = self.norm(hidden)
 
-        return self.decoder(hidden, embeddings),hidden
+        return self.decoder(hidden, embeddings)
 
-    def calculate_loss(self, batch_arrival_times, sampled_arrival_times, batch_types, times, reg_param=1.0,hidden = None ):
+    def calculate_loss(self, batch_arrival_times, sampled_arrival_times, batch_types,batch_probs):
         arrival_times = batch_arrival_times[:, 1:]
         sampled_times = sampled_arrival_times[:, :-1]
         ## Check the loss
 
-        # loss = torch.abs(arrival_times - sampled_times)
-        loss = (arrival_times - sampled_times)**2
-        batch_lengths = (batch_types != 0).sum(-1).to('cpu')  ## Non events are 0
-        batch_loss = nn.utils.rnn.pack_padded_sequence(loss.T, batch_lengths - 1, enforce_sorted=False)[0]
+        loss = torch.abs(arrival_times - sampled_times)
+        # loss = (arrival_times - sampled_times)
+        seq_length_mask = (batch_types[:,1:] != 0)*1
+        batch_loss = loss*seq_length_mask
         time_loss = batch_loss.sum()
 
-        seq_onehot_types = batch_types -1
-        seq_onehot_types[seq_onehot_types < 0] = self.num_types
-        seq_onehot_types = one_hot_embedding(seq_onehot_types, self.num_types + 1)
+        non_event_mask_prob = torch.zeros((batch_probs.size(0),batch_probs.size(1),1)).to(batch_arrival_times.device)
+        probs = torch.cat([non_event_mask_prob,batch_probs],dim = -1)
+        one_hot_encodings = one_hot_embedding(batch_types[:, 1:],self.num_types+1)
 
-        self.decoder.GAN._calculate_loss(batch_arrival_times, seq_onehot_types, n_mc_samples = 20)
+        cross_entropy_loss =-(one_hot_encodings*torch.log(probs[:,1:,:])).sum(-1)
+        cross_entropy_loss = loss * seq_length_mask
+        mark_loss = cross_entropy_loss.sum()
+        # seq_onehot_types = batch_types -1
+        # seq_onehot_types[seq_onehot_types < 0] = self.num_types
+        # seq_onehot_types = one_hot_embedding(seq_onehot_types, self.num_types + 1)
+        #
+        # loss = self.decoder.GAN._compute_loss(batch_arrival_times, seq_onehot_types, n_mc_samples = 20)
 
-
-
-        return time_loss
+        return time_loss +mark_loss
 
     def train_epoch(self, dataloader, optimizer, params):
 
@@ -67,10 +71,9 @@ class gated_tpp(nn.Module):
             optimizer.zero_grad()
 
             event_time, arrival_time, event_type, _ = map(lambda x: x.to(params.device), batch)
-            predicted_times,hidden = self(event_type, event_time, arrival_time)
+            predicted_times,probs = self(event_type, event_time, arrival_time)
 
-            batch_loss = self.calculate_loss(arrival_time, predicted_times, event_type, event_time,
-                                             reg_param=params.reg_param,hidden = hidden)
+            batch_loss = self.calculate_loss(arrival_time, predicted_times, event_type,probs)
             epoch_loss += batch_loss
             events += ((event_type != 0).sum(-1) - 1).sum()
 
@@ -87,25 +90,33 @@ class gated_tpp(nn.Module):
             all_errors = []
             for batch in dataloader:
                 event_time, arrival_time, event_type, _ = map(lambda x: x.to(device), batch)
-                predicted_times,hidden = self(event_type, event_time, arrival_time)
-                batch_loss = self.calculate_loss(arrival_time, predicted_times, event_type, event_time,
-                                                 reg_param=reg_param,hidden = hidden)
+                predicted_times,probs = self(event_type, event_time, arrival_time)
+                # predicted_times = torch.ones(arrival_time.size()).to(arrival_time.device)
+
+                batch_loss = self.calculate_loss(arrival_time, predicted_times, event_type, probs)
                 epoch_loss += batch_loss
                 events += ((event_type != 0).sum(-1) - 1).sum()
 
-                last_event_index = event_type.sum(-1) - 2
+                last_event_index = (event_type != 0).sum(-1) - 2
                 errors = predicted_times[:, :-1] - arrival_time[:, 1:]
                 seq_index = 0
 
+                predicted_events = torch.argmax(probs,dim = -1)
+                type_prediction_hits = (predicted_events[:, :-1] ==event_type[:, 1:])*1
+
+
+                accuracy = 0
                 for idx in last_event_index:
                     last_errors.append(errors[seq_index][idx].unsqueeze(-1))
                     all_errors.append(errors[seq_index][:idx + 1])
+                    accuracy+=type_prediction_hits[seq_index][:idx + 1].item()
+
             last_errors = torch.cat(last_errors)
             last_RMSE = (last_errors ** 2).mean().sqrt()
             all_errors = torch.cat(all_errors)
             all_RMSE = (all_errors ** 2).mean().sqrt()
-
-        return epoch_loss, events, all_RMSE, last_RMSE
+            last_event_accuracy = accuracy/len(dataloader.dataset.event_type)
+        return epoch_loss, events, all_RMSE, last_RMSE,last_event_accuracy
 
 
 class Encoder(nn.Module):
@@ -142,49 +153,37 @@ class Encoder(nn.Module):
 
         # Temporal Encoding
 
-        temp_enc = self.embedding(event_type, event_time)
+        temp_enc = self.embedding(event_type, event_time)* math.sqrt(self.d_model)
 
         # temp_enc = self.embedding(event_type, torch.cat([torch.zeros(event_time.size()[0], 1).to(event_time.device), event_time], dim=-1))
         # temp_enc =  (temp_enc[:, 1:, :] - temp_enc[:, :-1, :])
         # temp_enc = self.embedding(event_type) * math.sqrt(self.d_model)
 
         ## Type Encoding
-        type_embedding = self.type_emb(event_type) * math.sqrt(self.d_model)
-        ## Scale the embedding with the hidden vector size
-        embedding = temp_enc
-        # embedding = torch.cat([temp_enc, type_embedding], dim=-1)
+        type_embedding = self.type_emb(event_type)
+        xd_bar, xd = get_pairwise_type_embeddings(type_embedding)
+        combined_embeddings = torch.cat([xd_bar, xd], dim=-1)
 
+
+        xt_bar, xt = get_pairwise_times(event_time)
+        t_diff = torch.abs(xt_bar - xt)
+        ## Scale the embedding with the hidden vector size
+        hidden_vector  = type_embedding +type_embedding
         ## Future Masking
         subsequent_mask = get_subsequent_mask(event_type)
 
-        ## Time Scores
-        if self.embed_time:
-            xt_bar = embedding.unsqueeze(1).expand(embedding.size(
-                0), embedding.size(1), embedding.size(1), embedding.size(-1))
-            xt = xt_bar.transpose(1, 2)
-        else:
-            normalized_event_time = event_time
-            xt_bar = normalized_event_time.unsqueeze(1). \
-                expand(normalized_event_time.size(0), normalized_event_time.size(1), normalized_event_time.size(1))
-            xt = xt_bar.transpose(1, 2)
-
-        ## Space  Input
-        xd_bar = type_embedding.unsqueeze(1).expand(type_embedding.size(
-            0), type_embedding.size(1), type_embedding.size(1), type_embedding.size(-1))
-        xd = xd_bar.transpose(1, 2)
-
-        scores = self.kernel((xt, xt_bar), (xd, xd_bar)) * (self.sigmoid((xt, xt_bar), (xd, xd_bar)))
-        # scores = self.kernel((xt, xt_bar), (xd - xd_bar))
+        # scores = self.kernel((xt, xt_bar), (xd, xd_bar)) * (self.sigmoid((xt, xt_bar), (xd, xd_bar)))
+        scores = self.kernel(t_diff,combined_embeddings)
         if self.softmax:
-            scores = scores.masked_fill_(subsequent_mask == 0, value=-1e5)
+            scores = scores.masked_fill_(subsequent_mask == 0, value=-1e7)
             scores = F.softmax(scores, dim=-1)
 
         else:
             scores = scores.masked_fill_(subsequent_mask == 0, value=0)  ### BUGGGG ?????
-        self.scores = scores
-        self.t_diff = (xt - xt_bar)
 
-        return scores, embedding, self.t_diff
+        self.scores = scores
+
+        return scores, hidden_vector, t_diff
 
 
 class Decoder(nn.Module):
@@ -196,9 +195,9 @@ class Decoder(nn.Module):
 
         self.d_model = d_model
         self.num_types = num_types
-        # self.GAN = GenerativeAdversarialNetwork(num_types, d_model, dropout)
+        self.GAN = GenerativeAdversarialNetwork(num_types, d_model, dropout)
 
-        self.GAN = Intensity_Function(num_types, d_model)
+        # self.GAN = Intensity_Function(num_types, d_model)
 
 
     def forward(self, hidden, temp_encoding=None):
@@ -209,38 +208,50 @@ class Decoder(nn.Module):
 class GenerativeAdversarialNetwork(nn.Module):
 
     def __init__(self,
-                 num_types, d_model, dropout=0.1):
+                 num_types, d_model, dropout=0.1,layers=1,sample_size = 50):
         super().__init__()
 
         self.d_model = d_model
         self.num_types = num_types
-
+        self.samples = sample_size
+        self.layers = layers
         # self.input_weights = nn.Linear(d_model, d_model, bias=False)
         # self.noise_weights = nn.Linear(d_model, d_model, bias=False)
 
         self.mean = None
         self.std = None
-        self.input_weights = nn.Linear(d_model, d_model, bias=False)
-        self.noise_weights = nn.Linear(d_model, d_model, bias=False)
+        self.input_weights = nn.ModuleList([nn.Linear(d_model, d_model, bias=False) for i in range(layers)])
+        self.noise_weights = nn.ModuleList([nn.Linear(d_model, d_model, bias=False) for i in range(layers)])
 
         self.event_time_calculator = nn.Linear(d_model, 1, bias=False)
+        self.event_type_predictor = nn.Sequential(nn.Linear(d_model, d_model, bias=False), nn.ReLU(),
+                                                  nn.Linear(d_model, num_types, bias=False))
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, hidden):
         b_n, s_n, h_n = hidden.size()
-        sample = 50
+        sample = self.samples
 
-        noise = torch.rand((b_n, s_n,sample, h_n), device=hidden.device)
-        # hidden_sample = torch.relu(self.noise_weights(noise) + self.input_weights(hidden))
-        hidden_sample = torch.relu(self.input_weights(hidden))
+        for i in range(self.layers):
+            noise = torch.rand((b_n, s_n, sample, h_n), device=hidden.device)
+            noise_sampled = self.noise_weights[i](noise)
+            hidden = torch.relu(noise_sampled + self.input_weights[i](hidden)[:, :, None, :])
+
+        # noise = torch.rand((b_n, s_n,sample, h_n), device=hidden.device)
+        # # hidden_sample = torch.relu(self.noise_weights(noise) + self.input_weights(hidden))
+        # hidden_sample = torch.relu(self.input_weights(hidden))
         # hidden_sample = self.dropout(hidden_sample)
 
-        noise_sampled = self.noise_weights(noise)
-        hidden_samples = torch.relu(noise_sampled + self.input_weights(hidden)[:, :, None, :])
-        mean = nn.functional.softplus(self.event_time_calculator(hidden_samples)).squeeze(-1).mean(-1)
-        std = nn.functional.softplus(self.event_time_calculator(hidden_samples)).squeeze(-1).std(-1)
+        # noise_sampled = self.noise_weights(noise)
+        # hidden_samples = torch.relu(noise_sampled + self.input_weights(hidden)[:, :, None, :])
+        mean = nn.functional.softplus(self.event_time_calculator(hidden)).squeeze(-1).mean(-1)
+        std = nn.functional.softplus(self.event_time_calculator(hidden)).squeeze(-1).std(-1)
 
-        return mean
+        mark_probs = F.softmax(self.event_type_predictor(hidden),-1).mean(-2)
+
+
+
+        return mean,mark_probs
 
 
 def get_non_pad_mask(seq):
@@ -354,6 +365,10 @@ class Intensity_Function(nn.Module):
 
 
 
+
+
+
+
     def state_decay(self, converge_point, start_point, omega, duration_t):
         # * element-wise product
         cell_t = torch.tanh(converge_point + (start_point - converge_point) * torch.exp(- omega * duration_t))
@@ -364,7 +379,7 @@ class Intensity_Function(nn.Module):
 
         cell_t = self.state_decay(self.converge_point, self.start_point, self.omega, dt_seq[:, :, None])
         n_batch = dt_seq.size(0)
-        n_times = dt_seq.size(1) - 1
+        n_times = dt_seq.size(1)
         device = dt_seq.device
         # Get the intensity process
         intens_at_evs = self.intensity_layer(cell_t)
@@ -410,3 +425,34 @@ class GELU(nn.Module):
 
     def forward(self, x):
         return 0.5 * x * (1 + torch.tanh(math.sqrt(2 / math.pi) * (x + 0.044715 * torch.pow(x, 3))))
+
+
+def one_hot_embedding(labels,num_classes: int) -> torch.Tensor:
+    """Embedding labels to one-hot form. Produces an easy-to-use mask to select components of the intensity.
+    Args:
+        labels: class labels, sized [N,].
+        num_classes: number of classes.
+    Returns:
+        (tensor) encoded labels, sized [N, #classes].
+    """
+    device = labels.device
+    y = torch.eye(num_classes).to(device)
+    return y[labels]
+
+def count_parameters(model):
+    return sum(p.numel() for p in model.parameters() if p.requires_grad)
+
+
+def get_pairwise_times(event_time):
+    xt_bar = event_time.unsqueeze(1). \
+        expand(event_time.size(0), event_time.size(1), event_time.size(1))
+    xt = xt_bar.transpose(1, 2)
+    return (xt_bar, xt)
+
+
+def get_pairwise_type_embeddings(embeddings):
+    xd_bar = embeddings.unsqueeze(1).expand(embeddings.size(
+        0), embeddings.size(1), embeddings.size(1), embeddings.size(-1))
+    xd = xd_bar.transpose(1, 2)
+
+    return (xd_bar, xd)

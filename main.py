@@ -25,7 +25,7 @@ MODELS = {1: 'gated_TPP', 2: 'LogNormMix'}
 from dataset import get_dataloader
 from tqdm import tqdm
 import random
-from models.gated_tpp import gated_tpp
+from models.gated_tpp import gated_tpp,count_parameters
 import torch.nn.functional as F
 
 parser = argparse.ArgumentParser()
@@ -110,11 +110,17 @@ if not params.normalize:
     t_max = 1
 
 trainloader = get_dataloader(train_data, params.batch_size, shuffle=True,t_max = t_max)
-testloader = get_dataloader(test_data, 1, shuffle=False,t_max = t_max)  # 1 makes it easy to calculate RMSE
-valloader = get_dataloader(dev_data, 1, shuffle=False,t_max = t_max)
-
-
-
+testloader = get_dataloader(test_data, params.batch_size, shuffle=False,t_max = t_max)  # 1 makes it easy to calculate RMSE
+valloader = get_dataloader(dev_data, params.batch_size, shuffle=False,t_max = t_max)
+valid_events = 0
+test_events = 0
+train_events = 0
+for seq in valloader.dataset.event_type:
+    valid_events += len(seq)
+for seq in trainloader.dataset.event_type:
+    train_events += len(seq)
+for seq in testloader.dataset.event_type:
+    test_events  += len(seq)
 print(t_max)
 model = gated_tpp(num_types, params.d_model, params.d_type,dropout=params.dropout,
                   length_scale=params.length_scale,
@@ -152,10 +158,12 @@ with open(log_name, 'w') as f:
 train_losses = []
 validation_losses = []
 parameters = []
+
+print("the number of trainable parameters: " + str(count_parameters(model)))
 for epoch in range(params.epoch):
-    train_epoch_loss, train_events = model.train_epoch(trainloader, optimizer, params)
-    valid_epoch_loss, valid_events, val_RMSE, val_all_RMSE = model.validate_epoch(valloader, device = params.device,reg_param=params.reg_param)
-    test_epoch_loss, test_events, test_RMSE, test_all_RMSE = model.validate_epoch(testloader, device = params.device,reg_param=params.reg_param)
+    train_epoch_loss, _ = model.train_epoch(trainloader, optimizer, params)
+    valid_epoch_loss, _, val_RMSE, val_all_RMSE,val_accuracy = model.validate_epoch(valloader, device = params.device,reg_param=params.reg_param)
+    test_epoch_loss, _, test_RMSE, test_all_RMSE,test_accuracy = model.validate_epoch(testloader, device = params.device,reg_param=params.reg_param)
 
     train_loss = train_epoch_loss / train_events
     valid_loss = valid_epoch_loss / valid_events
@@ -165,34 +173,36 @@ for epoch in range(params.epoch):
     validation_losses.append(valid_loss)
     # type_emb = model.encoder.type_emb.weight * math.sqrt(model.d_model)
     # length_scale = model.encoder.kernel.params(type_emb)[0]['length_scale']
-    length_scale = F.softplus(model.encoder.kernel.lengthscale).item()
-    alpha = 1
-    # sigma = F.softplus(model.encoder.kernel.sigma).item()
-    sigma = 1
-    l =  F.softplus(model.encoder.sigmoid.l).item()
-    s = 1
-    b = F.softplus(model.encoder.sigmoid.b).item() +1
+    # length_scale = F.softplus(model.encoder.kernel.lengthscale).item()
+    # alpha = 1
+    # # sigma = F.softplus(model.encoder.kernel.sigma).item()
+    # sigma = 1
+    # l =  F.softplus(model.encoder.sigmoid.l).item()
+    # s = 0.5 +F.sigmoid(model.encoder.sigmoid.s).item()/2
+    # b = F.softplus(model.encoder.sigmoid.b).item() +1
     # if params.kernel_type == 1:
     #     alpha = 'NAN'
     # else:
     #     alpha = model.encoder.kernel.params(type_emb)[0]['alpha']
         # alpha = params.alpha
-    with open(log_name, 'a') as f:
-        f.write('{epoch}, {train_loss: 10.8f}, {validation_loss: 10.8f}, {l: 10.8f},{length_scale: 10.8f}\n'
-                .format(epoch=epoch, train_loss=train_loss, validation_loss=valid_loss, l=l, length_scale=length_scale))
+    # with open(log_name, 'a') as f:
+    #     f.write('{epoch}, {train_loss: 10.8f}, {validation_loss: 10.8f}, {l: 10.8f},{length_scale: 10.8f}\n'
+    #             .format(epoch=epoch, train_loss=train_loss, validation_loss=valid_loss, l=l, length_scale=length_scale))
 
     print(f'Epoch:{epoch}, Train Loss:{train_loss:.6f}, Valid Loss:{valid_loss:.6f}, Test Loss:{test_loss:.6f}')
-    # print(f' Valid Last Event RMSE:{val_RMSE:.4f}, Test Last Event RMSE:{test_RMSE:.4f}')
-    # print(f' Valid All Event RMSE:{val_all_RMSE:.4f}, Test All Event RMSE:{test_all_RMSE:.4f}')
-    print(f'b:{b}')
+    print(f' Valid Last Event RMSE:{val_RMSE:.4f}, Test Last Event RMSE:{test_RMSE:.4f},')
+    print(f' Valid Event Accuracy:{val_accuracy}, Valid Event Accuracy:{test_accuracy} /n')
+
+    # print(f' Valid All Event RMSE:{val_all_RMSE:.4f}, Test All Event RMSE:{test_all_RMSE:.4f}/n')
+    # print(f'b:{b},l:{l},s:{s},lengthscale:{length_scale}')
 
     # print(f'Lengthscale:{length_scale},alpha:{alpha},sigma:{sigma}')
     # print(f'l:{l},s:{s}')
 
-    parameters.append([l,length_scale])
+    # parameters.append([l,length_scale])
 
-min_val_loss_index = np.argmin(validation_losses)
-print(f' Min Val Loss:{min(validation_losses)},Best Params: l:{parameters[min_val_loss_index][0]}, lengthscale:{parameters[min_val_loss_index][1]}')
+# min_val_loss_index = np.argmin(validation_losses)
+# print(f' Min Val Loss:{min(validation_losses)}')
 # print(f' Valid Last Event RMSE:{val_RMSE:.4f}, Test Last Event RMSE:{test_RMSE:.4f}')
 # print(f' Valid All Event RMSE:{val_all_RMSE:.4f}, Test All Event RMSE:{test_all_RMSE:.4f}')
 
