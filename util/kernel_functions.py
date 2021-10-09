@@ -346,7 +346,7 @@ class magic_kernel(nn.Module):
 
         else:
             self.lengthscale = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Softplus(beta = 10))
-            self.alpha = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Softplus(beta = 10))
+            self.alpha = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Softplus(beta = 1))
             self.sigma = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Softplus())
             self.base_intensity = nn.Sequential(nn.Linear(d_type, 1, bias=False), nn.Softplus())
 
@@ -403,9 +403,9 @@ def get_pairwise_type_embeddings(embeddings):
 
     return (xd_bar, xd)
 
-def get_sample_intensities(kernel, batch, device='cpu', embeddings=None):
+def get_sample_intensities(kernel,event_time, arrival_time, event_type, device='cpu', embeddings=None):
 
-    event_time, arrival_time, event_type, _ = map(lambda x: x.to(device), batch)
+    # event_time, arrival_time, event_type, _ = map(lambda x: x.to(device), batch)
 
     xt_bar, xt = get_pairwise_times(event_time)
     t_diff = torch.abs(xt_bar - xt)
@@ -437,9 +437,10 @@ def get_sample_intensities(kernel, batch, device='cpu', embeddings=None):
     return (sample_intensities + base_intensity) * seq_length_mask
 
 
-def get_non_event_intensities(kernel, batch,type_embeddings=None, device='cpu',mc_sample_size = 5):
+def get_non_event_intensities(kernel,  event_time, arrival_time, event_type,
+                              type_embeddings=None, device='cpu',mc_sample_size = 5):
 
-    event_time, arrival_time, event_type, _ = map(lambda x: x.to(device), batch)
+    # event_time, arrival_time, event_type, _ = map(lambda x: x.to(device), batch)
 
     sample_arrival_time = arrival_time[:, 1:]
     sample_event_time = event_time[:, :-1]
@@ -460,7 +461,6 @@ def get_non_event_intensities(kernel, batch,type_embeddings=None, device='cpu',m
     mc_values_bar = mc_values_bar.transpose(1, 2)
     d = torch.abs((mc_values_bar - samples))
 
-
     if kernel.num_types == 1:
 
         non_event_intensities = kernel(d)
@@ -480,7 +480,7 @@ def get_non_event_intensities(kernel, batch,type_embeddings=None, device='cpu',m
             xd_bar = sample_embeddings.unsqueeze(1).expand(sample_embeddings.size(
                 0), sample_embeddings.size(1), sample_embeddings.size(1), sample_embeddings.size(-1))
 
-            current_embedding = type_embeddings(torch.tensor([i]))
+            current_embedding = type_embeddings(torch.tensor([i]).to(device))
             current_embedding = current_embedding[:, None, None:].expand(xd_bar.size()).transpose(1, 2)
             combined_embeddings = torch.cat([xd_bar, current_embedding], dim=-1)
 
@@ -491,7 +491,7 @@ def get_non_event_intensities(kernel, batch,type_embeddings=None, device='cpu',m
             integral = integral.sum(-1)
             seq_length_mask = (event_type[:, 1:] != 0) * 1
             integral = integral * seq_length_mask
-            base_intensity = kernel.base_intensity(type_embeddings(torch.tensor([i])))
+            base_intensity = kernel.base_intensity(type_embeddings(torch.tensor([i]).to(device)))
             sequence_integral += integral.sum(-1) + base_intensity * t_last
 
     return sequence_integral

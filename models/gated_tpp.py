@@ -37,7 +37,7 @@ class gated_tpp(nn.Module):
 
         return self.decoder(hidden, embeddings)
 
-    def calculate_loss(self, batch_arrival_times, sampled_arrival_times, batch_types,batch_probs):
+    def calculate_loss(self, batch_arrival_times, sampled_arrival_times, batch_types,batch_probs,event_time):
         arrival_times = batch_arrival_times[:, 1:]
         sampled_times = sampled_arrival_times[:, :-1]
         ## Check the loss
@@ -56,15 +56,18 @@ class gated_tpp(nn.Module):
         cross_entropy_loss =-(one_hot_encodings*torch.log(probs[:,:-1,:])).sum(-1)
         cross_entropy_loss = cross_entropy_loss * seq_length_mask
         mark_loss = cross_entropy_loss.sum()
-        # seq_onehot_types = batch_types -1
-        # seq_onehot_types[seq_onehot_types < 0] = self.num_types
-        # seq_onehot_types = one_hot_embedding(seq_onehot_types, self.num_types + 1)
-        #
-        # loss = self.decoder.GAN._compute_loss(batch_arrival_times, seq_onehot_types, n_mc_samples = 20)
-        # print(mark_loss)
-        # print(time_loss)
 
-        return time_loss+mark_loss
+        ## NLL Loss:
+        device = batch_arrival_times.device
+        embeddings = self.encoder.type_emb(batch_types)
+        sample_intensities = kernel_functions.get_sample_intensities(self.encoder.kernel,event_time, batch_arrival_times, batch_types,
+                                                                     device=device, embeddings=embeddings)
+        sample_intensities = sample_intensities.sum(-1)
+        non_event_intensities = kernel_functions.get_non_event_intensities(self.encoder.kernel,  event_time, batch_arrival_times,
+                                                                           batch_types,
+                              type_embeddings=self.encoder.type_emb, device=device,mc_sample_size = 5)
+        nll_loss = -(sample_intensities-non_event_intensities).sum()
+        return time_loss+mark_loss+nll_loss
 
     def train_epoch(self, dataloader, optimizer, params):
 
@@ -76,7 +79,7 @@ class gated_tpp(nn.Module):
             event_time, arrival_time, event_type, _ = map(lambda x: x.to(params.device), batch)
             predicted_times,probs = self(event_type, event_time, arrival_time)
 
-            batch_loss = self.calculate_loss(arrival_time, predicted_times, event_type,probs)
+            batch_loss = self.calculate_loss(arrival_time, predicted_times, event_type,probs,event_time)
             epoch_loss += batch_loss
             events += ((event_type != 0).sum(-1) - 1).sum()
 
@@ -97,7 +100,7 @@ class gated_tpp(nn.Module):
                 predicted_times,probs = self(event_type, event_time, arrival_time)
                 # predicted_times = torch.ones(arrival_time.size()).to(arrival_time.device)
 
-                batch_loss = self.calculate_loss(arrival_time, predicted_times, event_type, probs)
+                batch_loss = self.calculate_loss(arrival_time, predicted_times, event_type, probs,event_time)
                 epoch_loss += batch_loss
                 events += ((event_type != 0).sum(-1) - 1).sum()
 
