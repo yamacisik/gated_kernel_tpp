@@ -346,7 +346,7 @@ class magic_kernel(nn.Module):
 
         else:
             self.lengthscale = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Softplus(beta = 10))
-            self.alpha = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Softplus(beta = 1))
+            self.alpha = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Softplus(beta = 10))
             self.sigma = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Sigmoid())
             self.base_intensity = nn.Sequential(nn.Linear(d_type, 1, bias=False), nn.Softplus())
 
@@ -356,7 +356,7 @@ class magic_kernel(nn.Module):
 
         if self.num_types == 1:
             lengthscale = F.softplus(self.lengthscale)
-            sigma = F.Sigmoid(self.sigma)
+            sigma = torch.sigmoid(self.sigma)
             # sigma = 1
             alpha = F.softplus(self.alpha)
             base_intensity = F.softplus(self.base_intensity)
