@@ -153,20 +153,20 @@ print("the number of trainable parameters: " + str(count_parameters(model)))
 start_time = time.time()
 for epoch in range(params.epoch):
     train_epoch_loss, _ = model.train_epoch(trainloader, optimizer, params)
-    valid_epoch_loss, _, val_RMSE, val_all_RMSE,val_accuracy = model.validate_epoch(valloader, device = params.device,regularize=params.regularize)
-    test_epoch_loss, _, test_RMSE, test_all_RMSE,test_accuracy = model.validate_epoch(testloader, device = params.device,regularize=params.regularize)
+    # valid_epoch_loss, _, val_RMSE, val_all_RMSE,val_accuracy = model.validate_epoch(valloader, device = params.device,regularize=params.regularize)
+    # test_epoch_loss, _, test_RMSE, test_all_RMSE,test_accuracy = model.validate_epoch(testloader, device = params.device,regularize=params.regularize)
 
     train_loss = train_epoch_loss / train_events
-    valid_loss = valid_epoch_loss / valid_events
-    test_loss = test_epoch_loss / test_events
+    # valid_loss = valid_epoch_loss / valid_events
+    # test_loss = test_epoch_loss / test_events
 
 
     total_time = time.time() - start_time
     average_time = total_time/(epoch+1)
 
-    print(f'Epoch:{epoch}, Train Loss:{train_loss:.6f}, Valid Loss:{valid_loss:.6f}, Test Loss:{test_loss:.6f},Time per Epoch :{average_time:.6f}')
-    print(f' Valid Last Event RMSE:{val_RMSE:.4f}, Test Last Event RMSE:{test_RMSE:.4f},')
-    print(f' Valid Event Accuracy:{val_accuracy}, Test Event Accuracy:{test_accuracy} \n')
+    print(f'Epoch:{epoch}, Train Loss:{train_loss:.6f}, Valid Loss:{train_loss:.6f}, Test Loss:{train_loss:.6f},Time per Epoch :{average_time:.6f}')
+    # print(f' Valid Last Event RMSE:{val_RMSE:.4f}, Test Last Event RMSE:{test_RMSE:.4f},')
+    # print(f' Valid Event Accuracy:{val_accuracy}, Test Event Accuracy:{test_accuracy} \n')
 
 
 num_types = DATASET_EVENT_TYPES[params.data]
