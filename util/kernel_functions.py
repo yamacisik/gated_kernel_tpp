@@ -318,7 +318,7 @@ class rational_quadratic_kernel(nn.Module):
 class magic_kernel(nn.Module):
 
     def __init__(self,
-                 num_types=1, d_type=1, sigma=1, p=1, alpha=1, lengthscale=1.0, betas=[10, 1, 1]):
+                 num_types=1, d_type=1, sigma=1, p=1, alpha=1, lengthscale=1.0, betas=[1, 1, 1]):
         super().__init__()
 
         self.d_type = d_type
