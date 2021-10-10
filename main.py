@@ -140,11 +140,12 @@ for p in model.parameters():
         nn.init.xavier_uniform_(p)
 
 if params.timetovec:
+    stated_dict = torch.load('trained_embeddings/timetovec' +str(params.d_model)+  '.pt')
+    model.encoder.embedding.load_state_dict(stated_dict)
     for p in model.encoder.embedding.parameters():
         p.requires_grad = False
 
-    stated_dict = torch.load('trained_embeddings/timetovec' +str(params.d_model)+  '.pt')
-    model.encoder.embedding.load_state_dict(stated_dict)
+
 
 
 train_losses = []
