@@ -318,7 +318,7 @@ class rational_quadratic_kernel(nn.Module):
 class magic_kernel(nn.Module):
 
     def __init__(self,
-                 num_types=1, d_type=1, sigma=1, p=1, alpha=1, lengthscale=1.0, betas=[1, 5, 5]):
+                 num_types=1, d_type=1, sigma=1, p=1, alpha=1, lengthscale=1.0, betas=[1, 1, 1]):
         super().__init__()
 
         self.d_type = d_type
@@ -429,7 +429,8 @@ def get_sample_intensities(kernel,event_time, arrival_time, event_type, device='
     subsequent_mask = get_subsequent_mask(event_type)
     sample_intensities = scores.masked_fill_(subsequent_mask == 0, value=0).sum(-1)
 
-    sample_intensities = sample_intensities.sum(-1) - scores_0
+
+    sample_intensities = sample_intensities - scores_0
     seq_length_mask = (event_type != 0) * 1
 
     return (sample_intensities + base_intensity) * seq_length_mask
