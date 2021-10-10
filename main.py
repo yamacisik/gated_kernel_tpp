@@ -150,7 +150,6 @@ validation_losses = []
 parameters = []
 
 print("the number of trainable parameters: " + str(count_parameters(model)))
-total_time = 0
 start_time = time.time()
 for epoch in range(params.epoch):
     train_epoch_loss, _ = model.train_epoch(trainloader, optimizer, params)
@@ -162,8 +161,7 @@ for epoch in range(params.epoch):
     test_loss = test_epoch_loss / test_events
 
 
-    epoch_time = time.time() - start_time
-    total_time+= epoch_time
+    total_time = time.time() - start_time
     average_time = total_time/(epoch+1)
 
     print(f'Epoch:{epoch}, Train Loss:{train_loss:.6f}, Valid Loss:{valid_loss:.6f}, Test Loss:{test_loss:.6f},Time per Epoch :{average_time:.6f}')
