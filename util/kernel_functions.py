@@ -318,7 +318,7 @@ class rational_quadratic_kernel(nn.Module):
 class magic_kernel(nn.Module):
 
     def __init__(self,
-                 num_types=1, d_type=1, sigma=1, p=1, alpha=1, lengthscale=1.0, betas=[0.5, 1, 1]):
+                 num_types=1, d_type=1, sigma=1, p=1, alpha=1, lengthscale=1.0, betas=[10, 1, 1]):
         super().__init__()
 
         self.d_type = d_type
@@ -375,7 +375,7 @@ class magic_kernel(nn.Module):
             base_intensity = self.base_intensity(combined_embeddings[:, :, :, self.d_type:]).squeeze(-1)
 
         # (sigma ** 2) * (1 + (d ** 2) / (self.alpha * lengthscale ** 2)) ** (-self.alpha)
-        # sigma = 1
+        sigma = 1
         # (sigma ** 2) * (1 + (d ** 2) / (self.alpha * lengthscale ** 2)) ** (-self.alpha) *((1 + torch.exp(-d)) ** -alpha)
         self.scores = sigma * torch.exp(-d / lengthscale) * ((1 + torch.exp(-d)) ** -alpha)
         # self.scores = (sigma ** 2) * (1 + (d ** 2) / (1 * lengthscale ** 2)) ** (-1) *((1 + torch.exp(-d)) ** -alpha)
