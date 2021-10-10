@@ -6,10 +6,11 @@
 #python main.py -data power_hawkes -d_model 32 -d_type 32 -kernel_type 2  -epoch 25 -lr 0.0005 -batch 30  -timetovec 0 -softmax 0
 #python main.py -data power_hawkes -d_model 32 -d_type 32 -kernel_type 2  -epoch 25 -lr 0.0005 -batch 30  -timetovec 1 -softmax 0
 
-python main.py -data sin_hawkes -d_model 32 -d_type 32 -kernel_type 2  -epoch 50 -lr 0.0001 -batch 30  -timetovec 0 -softmax 0 -regularize 1
-python main.py -data sin_hawkes -d_model 32 -d_type 32 -kernel_type 2  -epoch 50 -lr 0.0001 -batch 30  -timetovec 0 -softmax 1 -regularize 1
-python main.py -data sin_hawkes -d_model 32 -d_type 32 -kernel_type 2  -epoch 25 -lr 0.0001 -batch 30  -timetovec 0 -softmax 1 -regularize 0
-python main.py -data sin_hawkes -d_model 32 -d_type 32 -kernel_type 2  -epoch 25 -lr 0.0001-batch 30  -timetovec 0 -softmax 0 -regularize 0
+python main.py -data 2_d_hawkes -d_model 32 -d_type 32 -kernel_type 2  -epoch 50 -lr 0.0001 -batch 30  -timetovec 0 -softmax 0 -regularize 1
+python main.py -data 2_d_hawkes -d_model 32 -d_type 32 -kernel_type 2  -epoch 50 -lr 0.0001 -batch 30  -timetovec 0 -softmax 1 -regularize 1
+
+#python main.py -data sin_hawkes -d_model 32 -d_type 32 -kernel_type 2  -epoch 50 -lr 0.0001 -batch 30  -timetovec 0 -softmax 1 -regularize 0
+#python main.py -data sin_hawkes -d_model 32 -d_type 32 -kernel_type 2  -epoch 50 -lr 0.0001 -batch 30  -timetovec 0 -softmax 0 -regularize 0
 
 
 #python main.py -data sin_hawkes -d_model 32 -d_type 32 -kernel_type 2  -epoch 25 -lr 0.0005 -batch 30  -timetovec 0 -softmax 0
