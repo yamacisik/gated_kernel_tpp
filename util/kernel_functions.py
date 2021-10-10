@@ -429,7 +429,7 @@ def get_sample_intensities(kernel,event_time, arrival_time, event_type, device='
     subsequent_mask = get_subsequent_mask(event_type)
     sample_intensities = scores.masked_fill_(subsequent_mask == 0, value=0).sum(-1)
 
-    sample_intensities = scores.sum(-1) - scores_0
+    sample_intensities = sample_intensities.sum(-1) - scores_0
     seq_length_mask = (event_type != 0) * 1
 
     return (sample_intensities + base_intensity) * seq_length_mask
