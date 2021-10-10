@@ -318,7 +318,7 @@ class rational_quadratic_kernel(nn.Module):
 class magic_kernel(nn.Module):
 
     def __init__(self,
-                 num_types=1, d_type=1, sigma=1, p=1, alpha=1, lengthscale=1.0, betas=[1, 1, 5]):
+                 num_types=1, d_type=1, sigma=1, p=1, alpha=1, lengthscale=1.0, betas=[1, 5, 5]):
         super().__init__()
 
         self.d_type = d_type
@@ -468,7 +468,7 @@ def get_non_event_intensities(kernel,  event_time, arrival_time, event_type,
         integral = integral.sum(-1)
         seq_length_mask = (event_type[:, 1:] != 0) * 1
         integral = integral * seq_length_mask
-        base_intensity = F.softplus(kernel.base_intensity, beta=1)
+        base_intensity = F.softplus(kernel.base_intensity, beta=kernel.betas[-1])
         sequence_integral =integral.sum(-1)+base_intensity*t_last
     else:
         sequence_integral = 0

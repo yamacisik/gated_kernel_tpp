@@ -155,8 +155,8 @@ parameters = []
 print("the number of trainable parameters: " + str(count_parameters(model)))
 for epoch in range(params.epoch):
     train_epoch_loss, _ = model.train_epoch(trainloader, optimizer, params)
-    valid_epoch_loss, _, val_RMSE, val_all_RMSE,val_accuracy = model.validate_epoch(valloader, device = params.device,reg_param=params.reg_param)
-    test_epoch_loss, _, test_RMSE, test_all_RMSE,test_accuracy = model.validate_epoch(testloader, device = params.device,reg_param=params.reg_param)
+    valid_epoch_loss, _, val_RMSE, val_all_RMSE,val_accuracy = model.validate_epoch(valloader, device = params.device,regularize=params.reg_param)
+    test_epoch_loss, _, test_RMSE, test_all_RMSE,test_accuracy = model.validate_epoch(testloader, device = params.device,regularize=params.reg_param)
 
     train_loss = train_epoch_loss / train_events
     valid_loss = valid_epoch_loss / valid_events
@@ -164,7 +164,7 @@ for epoch in range(params.epoch):
 
     train_losses.append(train_loss)
     validation_losses.append(valid_loss)
-
+    print(F.softplus(model.encoder.kernel.base_intensity, beta=model.encoder.kernel.betas[-1]))
     print(f'Epoch:{epoch}, Train Loss:{train_loss:.6f}, Valid Loss:{valid_loss:.6f}, Test Loss:{test_loss:.6f}')
     print(f' Valid Last Event RMSE:{val_RMSE:.4f}, Test Last Event RMSE:{test_RMSE:.4f},')
     print(f' Valid Event Accuracy:{val_accuracy}, Test Event Accuracy:{test_accuracy} \n')

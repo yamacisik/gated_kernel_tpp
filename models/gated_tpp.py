@@ -72,7 +72,7 @@ class gated_tpp(nn.Module):
             nll_loss = -(sample_intensities-non_event_intensities).sum()
         return time_loss+mark_loss+nll_loss
 
-    def train_epoch(self, dataloader, optimizer, params,regularize = False):
+    def train_epoch(self, dataloader, optimizer, params):
 
         epoch_loss = 0
         events = 0
@@ -82,7 +82,7 @@ class gated_tpp(nn.Module):
             event_time, arrival_time, event_type, _ = map(lambda x: x.to(params.device), batch)
             predicted_times,probs = self(event_type, event_time, arrival_time)
 
-            batch_loss = self.calculate_loss(arrival_time, predicted_times, event_type,probs,event_time,regularize = False)
+            batch_loss = self.calculate_loss(arrival_time, predicted_times, event_type,probs,event_time,regularize = params.regularize)
             epoch_loss += batch_loss
             events += ((event_type != 0).sum(-1) - 1).sum()
 
@@ -90,7 +90,7 @@ class gated_tpp(nn.Module):
             optimizer.step()
         return epoch_loss, events
 
-    def validate_epoch(self, dataloader, device='cpu', reg_param=0):
+    def validate_epoch(self, dataloader, device='cpu', reg_param=0,regularize = False):
 
         epoch_loss = 0
         events = 0
@@ -103,7 +103,7 @@ class gated_tpp(nn.Module):
                 predicted_times,probs = self(event_type, event_time, arrival_time)
                 # predicted_times = torch.ones(arrival_time.size()).to(arrival_time.device)
 
-                batch_loss = self.calculate_loss(arrival_time, predicted_times, event_type, probs,event_time)
+                batch_loss = self.calculate_loss(arrival_time, predicted_times, event_type, probs,event_time,regularize = regularize)
                 epoch_loss += batch_loss
                 events += ((event_type != 0).sum(-1) - 1).sum()
 
