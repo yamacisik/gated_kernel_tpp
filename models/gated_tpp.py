@@ -70,7 +70,7 @@ class gated_tpp(nn.Module):
                                                                                batch_types,
                                   type_embeddings=self.encoder.type_emb, device=device,mc_sample_size = 5)
             nll_loss = -(sample_intensities-non_event_intensities).sum()
-        return time_loss+mark_loss+nll_loss
+        return time_loss+mark_loss,nll_loss
 
     def train_epoch(self, dataloader, optimizer, params):
 
@@ -82,9 +82,13 @@ class gated_tpp(nn.Module):
             event_time, arrival_time, event_type, _ = map(lambda x: x.to(params.device), batch)
             predicted_times,probs = self(event_type, event_time, arrival_time)
 
-            batch_loss= self.calculate_loss(arrival_time, predicted_times, event_type,probs,event_time,regularize = params.regularize)
+            batch_loss,nll_loss= self.calculate_loss(arrival_time, predicted_times, event_type,probs,event_time,regularize = params.regularize)
+            batch_loss = batch_loss+nll_loss
+
             epoch_loss += batch_loss.item()
             events += ((event_type != 0).sum(-1) - 1).sum()
+            # nll_loss.backward()
+            # optimizer.zero_grad()
 
             batch_loss.backward()
 

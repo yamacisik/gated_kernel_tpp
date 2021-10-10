@@ -206,8 +206,8 @@ params_to_record = lengthscales +sigmas +alphas+base_intensities +kernel.betas
 
 params_to_record = [str(model_name)] +params_to_record
 results_to_record = [str(params.data), str(params.epoch), str(params.batch_size), str(params.d_model),
-                     str(params.d_type), str(params.lr), str(train_loss.item()), str(valid_loss.item()),
-                     str(test_loss.item()),str(val_all_RMSE.item()),
+                     str(params.d_type), str(params.lr), str(train_loss), str(valid_loss),
+                     str(test_loss),str(val_all_RMSE.item()),
                      str(test_all_RMSE.item()), str(val_RMSE.item()),
                      str(test_RMSE.item()),str(val_accuracy),str(test_accuracy),str(params.softmax),
                      str(params.timetovec),str(model_name)]
