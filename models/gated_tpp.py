@@ -82,11 +82,12 @@ class gated_tpp(nn.Module):
             event_time, arrival_time, event_type, _ = map(lambda x: x.to(params.device), batch)
             predicted_times,probs = self(event_type, event_time, arrival_time)
 
-            batch_loss = self.calculate_loss(arrival_time, predicted_times, event_type,probs,event_time,regularize = params.regularize)
-            epoch_loss += batch_loss
+            batch_loss= self.calculate_loss(arrival_time, predicted_times, event_type,probs,event_time,regularize = params.regularize)
+            epoch_loss += batch_loss.item()
             events += ((event_type != 0).sum(-1) - 1).sum()
 
             batch_loss.backward()
+
             optimizer.step()
         return epoch_loss, events
 
