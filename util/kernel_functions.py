@@ -495,12 +495,12 @@ def get_non_event_intensities(kernel,  event_time, arrival_time, event_type,
 
     return sequence_integral
 
-def get_subsequent_mask(seq):
+def get_subsequent_mask(seq,diag = 1):
     """ For masking out the subsequent info, i.e., masked self-attention. """
 
     sz_b, len_s = seq.size()
     subsequent_mask = torch.triu(
-        torch.ones((len_s, len_s), device=seq.device, dtype=torch.uint8), diagonal=1)
+        torch.ones((len_s, len_s), device=seq.device, dtype=torch.uint8), diagonal=diag)
     subsequent_mask = subsequent_mask.unsqueeze(0).expand(sz_b, -1, -1)  # b x ls x ls
     subsequent_mask = (subsequent_mask - 1) ** 2
     return subsequent_mask
