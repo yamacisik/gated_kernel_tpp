@@ -164,7 +164,6 @@ for epoch in range(params.epoch):
 
     train_losses.append(train_loss)
     validation_losses.append(valid_loss)
-    print(F.softplus(model.encoder.kernel.base_intensity, beta=model.encoder.kernel.betas[-1]))
     print(f'Epoch:{epoch}, Train Loss:{train_loss:.6f}, Valid Loss:{valid_loss:.6f}, Test Loss:{test_loss:.6f}')
     print(f' Valid Last Event RMSE:{val_RMSE:.4f}, Test Last Event RMSE:{test_RMSE:.4f},')
     print(f' Valid Event Accuracy:{val_accuracy}, Test Event Accuracy:{test_accuracy} \n')
