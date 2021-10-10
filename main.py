@@ -215,6 +215,7 @@ else:
 model_name =secrets.token_hex(5)
 
 params_to_record = lengthscales +sigmas +alphas
+print()
 params_to_record = [str(model_name)] +params_to_record
 results_to_record = [str(params.data), str(params.epoch), str(params.batch_size), str(params.d_model),
                      str(params.d_type), str(params.lr), str(train_loss.item()), str(valid_loss.item()),
