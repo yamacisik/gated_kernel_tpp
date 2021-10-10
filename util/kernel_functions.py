@@ -356,8 +356,8 @@ class magic_kernel(nn.Module):
 
         if self.num_types == 1:
             lengthscale = F.softplus(self.lengthscale)
-            # sigma = F.softplus(self.sigma)
-            sigma = 1
+            sigma = F.Sigmoid(self.sigma)
+            # sigma = 1
             alpha = F.softplus(self.alpha)
             base_intensity = F.softplus(self.base_intensity)
 

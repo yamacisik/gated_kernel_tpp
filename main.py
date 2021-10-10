@@ -210,7 +210,7 @@ if num_types>1:
 else:
     lengthscales= [F.softplus(model.encoder.kernel.lengthscale).item() for i in range(num_types**2)]
     alphas = [F.softplus(model.encoder.kernel.alpha).item() for i in range(num_types**2)]
-    sigmas = [F.softplus(model.encoder.kernel.sigma).item() for i in range(num_types**2)]
+    sigmas = [F.Sigmoid(model.encoder.kernel.sigma).item() for i in range(num_types**2)]
 
 model_name =secrets.token_hex(5)
 

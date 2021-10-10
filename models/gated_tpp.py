@@ -62,7 +62,8 @@ class gated_tpp(nn.Module):
         embeddings = self.encoder.type_emb(batch_types)
         sample_intensities = kernel_functions.get_sample_intensities(self.encoder.kernel,event_time, batch_arrival_times, batch_types,
                                                                      device=device, embeddings=embeddings)
-        sample_intensities = sample_intensities.sum(-1)
+        sample_intensities[sample_intensities == 0] = 1
+        sample_intensities = sample_intensities.log().sum(-1)
         non_event_intensities = kernel_functions.get_non_event_intensities(self.encoder.kernel,  event_time, batch_arrival_times,
                                                                            batch_types,
                               type_embeddings=self.encoder.type_emb, device=device,mc_sample_size = 5)
