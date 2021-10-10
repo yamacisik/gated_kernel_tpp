@@ -318,7 +318,7 @@ class rational_quadratic_kernel(nn.Module):
 class magic_kernel(nn.Module):
 
     def __init__(self,
-                 num_types=1, d_type=1, sigma=1, p=1, alpha=1, lengthscale=1.0, betas=[5, 1, 1]):
+                 num_types=1, d_type=1, sigma=1, p=1, alpha=1, lengthscale=1.0, betas=[1, 1, 1]):
         super().__init__()
 
         self.d_type = d_type
@@ -345,21 +345,21 @@ class magic_kernel(nn.Module):
             self.alpha = torch.nn.Parameter(torch.randn(1))
 
         else:
-            self.lengthscale = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Softplus(beta = 10))
-            self.alpha = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Softplus(beta = 10))
+            self.lengthscale = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Softplus(self.betas[0]))
+            self.alpha = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Softplus(self.betas[1]))
             self.sigma = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Sigmoid())
-            self.base_intensity = nn.Sequential(nn.Linear(d_type, 1, bias=False), nn.Softplus())
+            self.base_intensity = nn.Sequential(nn.Linear(d_type, 1, bias=False), nn.Softplus(self.betas[2]))
 
     def forward(self, time_diff, combined_embeddings=None,non_event_intensity = False):
 
         d = time_diff
 
         if self.num_types == 1:
-            lengthscale = F.softplus(self.lengthscale,beta = 10)
+            lengthscale = F.softplus(self.lengthscale,self.betas[0])
             sigma = torch.sigmoid(self.sigma)
             # sigma = 1
-            alpha = F.softplus(self.alpha,beta = 10)
-            base_intensity = F.softplus(self.base_intensity)
+            alpha = F.softplus(self.alpha,self.betas[1])
+            base_intensity = F.softplus(self.base_intensity,self.betas[2])
 
         else:
             if not non_event_intensity:

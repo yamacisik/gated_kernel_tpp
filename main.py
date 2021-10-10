@@ -55,6 +55,7 @@ parser.add_argument('-normalize', type=int, default=0)
 parser.add_argument('-embed_time', type=int, default=0)
 parser.add_argument('-timetovec', type=int, default=0)
 parser.add_argument('-softmax', type=int, default=0)
+parser.add_argument('-regularize', type=int, default=0)
 
 params = parser.parse_args()
 
@@ -62,6 +63,7 @@ params.timetovec = True if params.timetovec == 1 else False
 params.normalize = True if params.normalize == 1 else False
 params.embed_time = True if params.embed_time == 1 else False
 params.softmax = True if params.softmax == 1 else False
+params.regularize = True if params.regularize == 1 else False
 
 time_stamp =datetime.now()
 date = str(time_stamp.date()).replace('-','')
@@ -129,16 +131,6 @@ model = gated_tpp(num_types, params.d_model, params.d_type,dropout=params.dropou
                   embed_time=params.embed_time,timetovec=params.timetovec,l = params.l,s = params.s,
                   p = params.p_norm,sigma = params.sigma)
 
-
-
-
-
-for p in model.encoder.embedding.parameters():
-    p.requires_grad = False
-
-# for p in model.encoder.type_emb.parameters():
-#         p.requires_grad = False
-
 optimizer = optim.Adam(filter(lambda x: x.requires_grad, model.parameters()),
                        params.lr, betas=(0.9, 0.999), eps=1e-05, weight_decay=params.l2)
 
@@ -148,13 +140,12 @@ for p in model.parameters():
         nn.init.xavier_uniform_(p)
 
 if params.timetovec:
+    for p in model.encoder.embedding.parameters():
+        p.requires_grad = False
+
     stated_dict = torch.load('trained_embeddings/timetovec' +str(params.d_model)+  '.pt')
     model.encoder.embedding.load_state_dict(stated_dict)
-#
-#
-# log_name = 'training_logs/'+modelname+'_log.txt'
-# with open(log_name, 'w') as f:
-#     f.write('Epoch, train_loss, validation_loss,s,length_scale\n')
+
 
 train_losses = []
 validation_losses = []
@@ -172,23 +163,6 @@ for epoch in range(params.epoch):
 
     train_losses.append(train_loss)
     validation_losses.append(valid_loss)
-    # type_emb = model.encoder.type_emb.weight * math.sqrt(model.d_model)
-    # length_scale = model.encoder.kernel.params(type_emb)[0]['length_scale']
-    # length_scale = F.softplus(model.encoder.kernel.lengthscale).item()
-    # alpha = 1
-    # # sigma = F.softplus(model.encoder.kernel.sigma).item()
-    # sigma = 1
-    # l =  F.softplus(model.encoder.sigmoid.l).item()
-    # s = 0.5 +F.sigmoid(model.encoder.sigmoid.s).item()/2
-    # b = F.softplus(model.encoder.sigmoid.b).item() +1
-    # if params.kernel_type == 1:
-    #     alpha = 'NAN'
-    # else:
-    #     alpha = model.encoder.kernel.params(type_emb)[0]['alpha']
-        # alpha = params.alpha
-    # with open(log_name, 'a') as f:
-    #     f.write('{epoch}, {train_loss: 10.8f}, {validation_loss: 10.8f}, {l: 10.8f},{length_scale: 10.8f}\n'
-    #             .format(epoch=epoch, train_loss=train_loss, validation_loss=valid_loss, l=l, length_scale=length_scale))
 
     print(f'Epoch:{epoch}, Train Loss:{train_loss:.6f}, Valid Loss:{valid_loss:.6f}, Test Loss:{test_loss:.6f}')
     print(f' Valid Last Event RMSE:{val_RMSE:.4f}, Test Last Event RMSE:{test_RMSE:.4f},')
@@ -197,6 +171,7 @@ for epoch in range(params.epoch):
 
 
 num_types = DATASET_EVENT_TYPES[params.data]
+kernel = model.encoder.kernel
 if num_types>1:
     events = torch.tensor([range(1,num_types+1)]).to(params.device)
     embeddings = model.encoder.type_emb(events)
@@ -204,18 +179,25 @@ if num_types>1:
     xd_bar, xd = get_pairwise_type_embeddings(embeddings)
     combined_embeddings = torch.cat([xd_bar, xd], dim=-1)
 
-    lengthscales = model.encoder.kernel.lengthscale(combined_embeddings).cpu().detach().numpy().flatten().tolist()
-    alphas = model.encoder.kernel.alpha(combined_embeddings).cpu().detach().numpy().flatten().tolist()
-    sigmas = model.encoder.kernel.sigma(combined_embeddings).cpu().detach().numpy().flatten().tolist()
+    lengthscales = kernel.lengthscale(combined_embeddings).cpu().detach().numpy().flatten().tolist()
+    alphas = kernel.alpha(combined_embeddings).cpu().detach().numpy().flatten().tolist()
+    sigmas = kernel.sigma(combined_embeddings).cpu().detach().numpy().flatten().tolist()
+    base_intensities = []
+    for i in range(1,num_types+1):
+        embedding = model.encoder.type_emb(torch.tensor(1).to(device))
+        base_intensities.append(kernel.base_intensity(embedding).item())
+
+
 else:
-    lengthscales= [F.softplus(model.encoder.kernel.lengthscale,beta = 10).item() for i in range(num_types**2)]
-    alphas = [F.softplus(model.encoder.kernel.alpha,beta = 10).item() for i in range(num_types**2)]
-    sigmas = [torch.sigmoid(model.encoder.kernel.sigma).item() for i in range(num_types**2)]
+    lengthscales= [F.softplus(kernel.lengthscale,beta = kernel.betas[0]).item() for i in range(num_types**2)]
+    alphas = [F.softplus(kernel.alpha,beta = kernel.betas[1]).item() for i in range(num_types**2)]
+    base_intensities = [F.softplus(kernel.base_intensity, beta=kernel.betas[2]).item() for i in range(num_types)]
+    sigmas = [torch.sigmoid(kernel.sigma).item() for i in range(num_types**2)]
 
 model_name =secrets.token_hex(5)
 
-params_to_record = lengthscales +sigmas +alphas
-print()
+params_to_record = lengthscales +sigmas +alphas+base_intensities +kernel.betas
+
 params_to_record = [str(model_name)] +params_to_record
 results_to_record = [str(params.data), str(params.epoch), str(params.batch_size), str(params.d_model),
                      str(params.d_type), str(params.lr), str(train_loss.item()), str(valid_loss.item()),
