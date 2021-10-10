@@ -355,10 +355,10 @@ class magic_kernel(nn.Module):
         d = time_diff
 
         if self.num_types == 1:
-            lengthscale = F.softplus(self.lengthscale)
+            lengthscale = F.softplus(self.lengthscale,beta = 10)
             sigma = torch.sigmoid(self.sigma)
             # sigma = 1
-            alpha = F.softplus(self.alpha)
+            alpha = F.softplus(self.alpha,beta = 10)
             base_intensity = F.softplus(self.base_intensity)
 
         else:

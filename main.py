@@ -208,9 +208,9 @@ if num_types>1:
     alphas = model.encoder.kernel.alpha(combined_embeddings).cpu().detach().numpy().flatten().tolist()
     sigmas = model.encoder.kernel.sigma(combined_embeddings).cpu().detach().numpy().flatten().tolist()
 else:
-    lengthscales= [F.softplus(model.encoder.kernel.lengthscale).item() for i in range(num_types**2)]
-    alphas = [F.softplus(model.encoder.kernel.alpha).item() for i in range(num_types**2)]
-    sigmas = [F.Sigmoid(model.encoder.kernel.sigma).item() for i in range(num_types**2)]
+    lengthscales= [F.softplus(model.encoder.kernel.lengthscale,beta = 10).item() for i in range(num_types**2)]
+    alphas = [F.softplus(model.encoder.kernel.alpha,beta = 10).item() for i in range(num_types**2)]
+    sigmas = [torch.sigmoid(model.encoder.kernel.sigma).item() for i in range(num_types**2)]
 
 model_name =secrets.token_hex(5)
 
