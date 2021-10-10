@@ -65,10 +65,7 @@ params.embed_time = True if params.embed_time == 1 else False
 params.softmax = True if params.softmax == 1 else False
 params.regularize = True if params.regularize == 1 else False
 
-time_stamp =datetime.now()
-date = str(time_stamp.date()).replace('-','')
-time = str(time_stamp.time())[:8].replace(':','')
-modelname = date +'_' +time
+
 
 # ------Reproducibility-------
 
