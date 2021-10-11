@@ -353,7 +353,7 @@ class magic_kernel(nn.Module):
 
 
             self.lengthscale = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Sigmoid())
-            self.alpha = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Sigmoid())
+            self.alpha = nn.Sequential(nn.Linear(d_type * 2, d_type, bias=False),nn.Linear(d_type , 1, bias=False), nn.Sigmoid())
             self.sigma = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Sigmoid())
             #
             # self.parameter_layer = nn.Sequential(nn.Linear(d_type * 2, 3, bias=False), nn.Sigmoid())
