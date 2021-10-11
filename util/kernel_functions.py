@@ -352,9 +352,13 @@ class magic_kernel(nn.Module):
             # self.base_intensity = nn.Sequential(nn.Linear(d_type, 1, bias=False), nn.Softplus(self.betas[2]))
 
 
-            self.lengthscale = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Sigmoid())
-            self.alpha = nn.Sequential(nn.Linear(d_type * 2, d_type, bias=False),nn.ReLU(),nn.Linear(d_type , 1, bias=False), nn.Sigmoid())
-            self.sigma = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Sigmoid())
+            # self.lengthscale = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Sigmoid())
+            # self.alpha = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Sigmoid())
+            # self.sigma = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Sigmoid())
+            #
+            self.parameter_layer = nn.Sequential(nn.Linear(d_type * 2, 3, bias=False), nn.Sigmoid())
+
+
             # self.base_intensity = nn.Sequential(nn.Linear(d_type, 1, bias=False), nn.Sigmoid())
 
 
@@ -371,9 +375,14 @@ class magic_kernel(nn.Module):
 
         else:
             if not non_event_intensity:
-                lengthscale = self.lengthscale(combined_embeddings).squeeze(-1)
-                sigma = self.sigma(combined_embeddings).squeeze(-1)
-                alpha = self.alpha(combined_embeddings).squeeze(-1)
+                # lengthscale = self.lengthscale(combined_embeddings).squeeze(-1)
+                # sigma = self.sigma(combined_embeddings).squeeze(-1)
+                # alpha = self.alpha(combined_embeddings).squeeze(-1)
+
+                lengthscale = self.parameter_layer(combined_embeddings)[:,:,:,0].squeeze(-1)*3
+                sigma = self.parameter_layer(combined_embeddings)[:, :,:, 1].squeeze(-1)
+                alpha = self.parameter_layer(combined_embeddings)[:, :,:, 2].squeeze(-1)*6
+
 
                 # self.param_loss = torch.abs(self.lengthscale[0](combined_embeddings)).mean()*5+1*torch.abs(self.alpha[0](combined_embeddings)).mean()
                 # self.param_loss = torch.abs(self.alpha[0](combined_embeddings)).mean()*0.5
@@ -381,10 +390,15 @@ class magic_kernel(nn.Module):
 
 
             else:
-                lengthscale =self.lengthscale(combined_embeddings)*3
-                sigma = self.sigma(combined_embeddings)
-                alpha = self.alpha(combined_embeddings)*6
+                # lengthscale =self.lengthscale(combined_embeddings)*3
+                # sigma = self.sigma(combined_embeddings)
+                # alpha = self.alpha(combined_embeddings)*6
 
+                lengthscale = self.parameter_layer(combined_embeddings)[:,:,0]*3
+                sigma = self.parameter_layer(combined_embeddings)[:, :, 1]
+                alpha = self.parameter_layer(combined_embeddings)[:, :, 2]*6
+            print(self.parameter_layer(combined_embeddings).shape)
+            print(sigma.shape)
             # base_intensity = self.base_intensity(combined_embeddings[:, :, :, self.d_type:]).squeeze(-1)
 
         # (sigma ** 2) * (1 + (d ** 2) / (self.alpha * lengthscale ** 2)) ** (-self.alpha)

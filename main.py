@@ -192,9 +192,9 @@ if num_types>1:
     xd_bar, xd = get_pairwise_type_embeddings(embeddings)
     combined_embeddings = torch.cat([xd_bar, xd], dim=-1)
 
-    lengthscales = kernel.lengthscale(combined_embeddings).cpu().detach().numpy().flatten().tolist()
-    alphas = kernel.alpha(combined_embeddings).cpu().detach().numpy().flatten().tolist()
-    sigmas = kernel.sigma(combined_embeddings).cpu().detach().numpy().flatten().tolist()
+    lengthscales = kernel.lengthparameter_layerscale(combined_embeddings)[0].cpu().detach().numpy().flatten().tolist()
+    alphas = kernel.parameter_layer(combined_embeddings)[1].cpu().detach().numpy().flatten().tolist()
+    sigmas = kernel.siparameter_layergma(combined_embeddings)[2].cpu().detach().numpy().flatten().tolist()
     base_intensities = []
     for i in range(1,num_types+1):
         # embedding = model.encoder.type_emb(torch.tensor(1).to(device))
