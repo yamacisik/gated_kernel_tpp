@@ -397,8 +397,7 @@ class magic_kernel(nn.Module):
                 lengthscale = self.parameter_layer(combined_embeddings)[:,:,0]*3
                 sigma = self.parameter_layer(combined_embeddings)[:, :, 1]
                 alpha = self.parameter_layer(combined_embeddings)[:, :, 2]*6
-            print(self.parameter_layer(combined_embeddings).shape)
-            print(sigma.shape)
+
             # base_intensity = self.base_intensity(combined_embeddings[:, :, :, self.d_type:]).squeeze(-1)
 
         # (sigma ** 2) * (1 + (d ** 2) / (self.alpha * lengthscale ** 2)) ** (-self.alpha)
