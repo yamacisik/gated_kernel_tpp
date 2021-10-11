@@ -41,7 +41,13 @@ parser.add_argument('-alpha', type=float, default=1.0)
 parser.add_argument('-length_scale', type=float, default=1.0)
 parser.add_argument('-l', type=float, default=1.0)
 parser.add_argument('-s', type=float, default=1.0)
-parser.add_argument('-reg_param', type=float, default=0.0)
+parser.add_argument('-reg_param', type=float, default=5.0)
+parser.add_argument('-beta_1', type=float, default=0.4)
+parser.add_argument('-beta_2', type=float, default=0.3)
+parser.add_argument('-beta_3', type=float, default=1.0)
+
+
+
 parser.add_argument('-kernel_type', type=int, default=1)
 parser.add_argument('-p_norm', type=float, default=1)
 parser.add_argument('-sigma', type=float, default=1)
@@ -122,11 +128,12 @@ for seq in trainloader.dataset.event_type:
 for seq in testloader.dataset.event_type:
     test_events  += len(seq)
 print(t_max)
+betas = [params.beta_1,params.beta_2,params.beta_3]
 model = gated_tpp(num_types, params.d_model, params.d_type,dropout=params.dropout,
                   length_scale=params.length_scale,
                   kernel_type=KERNEL_TYPES[params.kernel_type], alpha=params.alpha, softmax=params.softmax,
                   embed_time=params.embed_time,timetovec=params.timetovec,l = params.l,s = params.s,
-                  p = params.p_norm,sigma = params.sigma)
+                  p = params.p_norm,sigma = params.sigma,regulizing_param= params.reg_param)
 
 optimizer = optim.Adam(filter(lambda x: x.requires_grad, model.parameters()),
                        params.lr, betas=(0.9, 0.999), eps=1e-05, weight_decay=params.l2)

@@ -14,7 +14,7 @@ class gated_tpp(nn.Module):
 
     def __init__(self,
                  num_types, d_model, d_type=1, dropout=0.1, length_scale=1.0,
-                 kernel_type='squared_exponential', s=1.0, l=1.0, p=1.0,
+                 kernel_type='squared_exponential', s=1.0, l=1.0, p=1.0,regulizing_param=5,betas = [0.4,0.3,1.0],
                  alpha=1.0, softmax=False, embed_time=False, timetovec=False,sigma = 1.0):
         super().__init__()
 
@@ -23,7 +23,7 @@ class gated_tpp(nn.Module):
         self.num_types = num_types
         self.encoder = Encoder(num_types, d_model, d_type, length_scale=length_scale,
                                kernel_type=kernel_type, alpha=alpha, test_softmax=softmax, embed_time=embed_time,
-                               timetovec=timetovec, s=s, l=l, p=p,sigma= sigma)
+                               timetovec=timetovec, s=s, l=l, p=p,sigma= sigma,regulizing_param=regulizing_param,betas = betas)
         self.norm = nn.LayerNorm(d_model, eps=1e-6)
         self.decoder = Decoder(num_types, d_model, dropout)
 
@@ -142,7 +142,8 @@ class Encoder(nn.Module):
     def __init__(self,
                  num_types, d_model, d_type=1, length_scale=1.0, kernel_type='squared_exponential',
                  alpha=1.0, s=1.0, l=1.0, p=1,
-                 test_softmax=False, embed_time=False, timetovec=False,sigma = 1.0):
+                 test_softmax=False, embed_time=False, timetovec=False,sigma = 1.0,
+                 regulizing_param=5,betas = [0.4,0.3,1.0]):
         super().__init__()
 
         self.d_model = d_model
@@ -161,7 +162,7 @@ class Encoder(nn.Module):
         self.w_k = torch.tensor([math.pow(10000.0, 2.0 * ((i // 2) + 1) / d_model) for i in range(d_model)])
         self.sigmoid = kernel_functions.rational_quadratic_kernel(num_types, d_type)
         # self.kernel = getattr(kernel_functions, kernel_type +'_kernel')(num_types, d_type, norm=1)
-        self.kernel = kernel_functions.magic_kernel(num_types, d_type)
+        self.kernel = kernel_functions.magic_kernel(num_types, d_type,regulizing_param = regulizing_param,betas = betas)
         self.softmax = test_softmax
         self.embed_time = embed_time
 

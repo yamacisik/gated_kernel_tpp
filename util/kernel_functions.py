@@ -306,7 +306,7 @@ class rational_quadratic_kernel(nn.Module):
             sigma = self.sigma(combined_embeddings).squeeze(-1)
             base_intensity = self.base_intensity(combined_embeddings[:, :, :, self.d_type:]).squeeze(-1)
 
-        self.scores = (sigma ** 2) * (1 + (d ** 2) / (self.alpha * lengthscale ** 2)) ** (-self.alpha)
+        self.scores = (sigma ** 2) * (1 + (d ** 2) / (self.alpha * lengthscale ** 2)) ** (-self.alpha/2)
 
         return self.scores
 
@@ -318,7 +318,7 @@ class rational_quadratic_kernel(nn.Module):
 class magic_kernel(nn.Module):
 
     def __init__(self,
-                 num_types=1, d_type=1, sigma=1, p=1, alpha=1, lengthscale=1.0, betas=[0.4, 0.3, 1]):
+                 num_types=1, d_type=1, sigma=1, p=1, alpha=1, regulizing_param=5.0, betas=[0.4, 0.3, 1]):
         super().__init__()
 
         self.d_type = d_type
@@ -328,7 +328,7 @@ class magic_kernel(nn.Module):
         self.scores = None
         self.sigma = sigma
         self.alpha = alpha
-
+        self.regulizing_param = regulizing_param
         self.betas = betas
 
         """
@@ -343,6 +343,7 @@ class magic_kernel(nn.Module):
             self.base_intensity = torch.nn.Parameter(torch.randn(1))
             self.sigma = torch.nn.Parameter(torch.randn(1))
             self.alpha = torch.nn.Parameter(torch.randn(1))
+
 
         else:
             self.lengthscale = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Softplus(self.betas[0]))
@@ -367,7 +368,7 @@ class magic_kernel(nn.Module):
                 sigma = self.sigma(combined_embeddings).squeeze(-1)
                 alpha = self.alpha(combined_embeddings).squeeze(-1)
 
-                self.param_loss = torch.abs(self.lengthscale[0](combined_embeddings)).mean()*5 +torch.abs(self.alpha[0](combined_embeddings)).mean()
+                self.param_loss = torch.abs(self.lengthscale[0](combined_embeddings)).mean()*self.regulizing_param +torch.abs(self.alpha[0](combined_embeddings)).mean()
 
             else:
                 lengthscale = self.lengthscale(combined_embeddings)
