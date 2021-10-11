@@ -197,14 +197,16 @@ if num_types>1:
     sigmas = kernel.sigma(combined_embeddings).cpu().detach().numpy().flatten().tolist()
     base_intensities = []
     for i in range(1,num_types+1):
-        embedding = model.encoder.type_emb(torch.tensor(1).to(device))
-        base_intensities.append(kernel.base_intensity(embedding).item())
+        # embedding = model.encoder.type_emb(torch.tensor(1).to(device))
+        base_intensities.append(1)
 
 
 else:
     lengthscales= [F.softplus(kernel.lengthscale,beta = kernel.betas[0]).item() for i in range(num_types**2)]
     alphas = [F.softplus(kernel.alpha,beta = kernel.betas[1]).item() for i in range(num_types**2)]
-    base_intensities = [F.softplus(kernel.base_intensity, beta=kernel.betas[2]).item() for i in range(num_types)]
+    # base_intensities = [F.softplus(kernel.base_intensity, beta=kernel.betas[2]).item() for i in range(num_types)]
+    base_intensities = [1]*(num_types**2)
+
     sigmas = [torch.sigmoid(kernel.sigma).item() for i in range(num_types**2)]
 
 model_name =secrets.token_hex(5)
