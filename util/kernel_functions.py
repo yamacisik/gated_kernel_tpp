@@ -350,7 +350,8 @@ class magic_kernel(nn.Module):
             self.alpha = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Softplus(self.betas[1]))
             self.sigma = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Sigmoid())
             self.base_intensity = nn.Sequential(nn.Linear(d_type, 1, bias=False), nn.Softplus(self.betas[2]))
-
+            print(self.betas[1])
+            print(self.regulizing_param)
     def forward(self, time_diff, combined_embeddings=None,non_event_intensity = False):
 
         d = time_diff

@@ -133,7 +133,7 @@ model = gated_tpp(num_types, params.d_model, params.d_type,dropout=params.dropou
                   length_scale=params.length_scale,
                   kernel_type=KERNEL_TYPES[params.kernel_type], alpha=params.alpha, softmax=params.softmax,
                   embed_time=params.embed_time,timetovec=params.timetovec,l = params.l,s = params.s,
-                  p = params.p_norm,sigma = params.sigma,regulizing_param= params.reg_param)
+                  p = params.p_norm,sigma = params.sigma,regulizing_param= params.reg_para,betas = betas)
 
 optimizer = optim.Adam(filter(lambda x: x.requires_grad, model.parameters()),
                        params.lr, betas=(0.9, 0.999), eps=1e-05, weight_decay=params.l2)

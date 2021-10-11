@@ -90,7 +90,8 @@ class gated_tpp(nn.Module):
             events += ((event_type != 0).sum(-1) - 1).sum()
             # nll_loss.backward()
             # optimizer.zero_grad()
-
+            # self.encoder.kernel.lengthscale[0].weight = self.encoder.kernel.lengthscale[0].weight.clamp(-0.5,0.5)
+            # self.encoder.kernel.alpha[0].weight = self.encoder.kernel.lengthscale[0].weight.clamp(-0.5, 0.5)
             batch_loss.backward()
 
             optimizer.step()
