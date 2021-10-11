@@ -151,7 +151,7 @@ class Encoder(nn.Module):
             self.embedding = BiasedPositionalEmbedding(d_model, max_len=4096)
         # self.embedding = nn.Embedding(num_types + 1, d_model, padding_idx=0)
         self.type_emb = nn.Embedding(num_types + 1, d_type, padding_idx=0)
-        self.type_emb_prediction = nn.Embedding(num_types + 1, d_type, padding_idx=0)
+        # self.type_emb_prediction = nn.Embedding(num_types + 1, d_type, padding_idx=0)
 
         # self.w_k = torch.tensor([math.pow(10000.0, 2.0 * (i) / d_model) for i in range(d_model)])
 
@@ -185,7 +185,7 @@ class Encoder(nn.Module):
         if self.num_types ==1:
             hidden_vector = temp_enc
         else:
-            hidden_vector  = temp_enc +self.type_emb_prediction(event_type)
+            hidden_vector  = temp_enc +type_embedding
 
         ## Future Masking
         subsequent_mask = get_subsequent_mask(event_type)

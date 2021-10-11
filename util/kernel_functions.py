@@ -367,7 +367,7 @@ class magic_kernel(nn.Module):
                 sigma = self.sigma(combined_embeddings).squeeze(-1)
                 alpha = self.alpha(combined_embeddings).squeeze(-1)
 
-                self.param_loss = torch.abs(self.lengthscale[0](combined_embeddings)).sum() +torch.abs(self.alpha[0](combined_embeddings)).sum()
+                self.param_loss = torch.abs(self.lengthscale[0](combined_embeddings)).mean() +torch.abs(self.alpha[0](combined_embeddings)).mean()
 
             else:
                 lengthscale = self.lengthscale(combined_embeddings)
@@ -506,3 +506,20 @@ def get_subsequent_mask(seq,diag = 1):
     subsequent_mask = subsequent_mask.unsqueeze(0).expand(sz_b, -1, -1)  # b x ls x ls
     subsequent_mask = (subsequent_mask - 1) ** 2
     return subsequent_mask
+
+
+class parameter_layer(nn.Module):
+
+    def __init__(self,
+                 num_types=1, d_type=1, sigma=1, p=1, alpha=1, lengthscale=1.0, betas=[1, 1, 1]):
+        super().__init__()
+
+        self.d_type = d_type
+        self.num_types = num_types
+        self.norm = p
+        self.param_loss = 0
+        self.scores = None
+        self.sigma = sigma
+        self.alpha = alpha
+
+        self.betas = betas
