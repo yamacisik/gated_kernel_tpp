@@ -345,8 +345,8 @@ class magic_kernel(nn.Module):
             self.alpha = torch.nn.Parameter(torch.randn(1))
 
         else:
-            self.lengthscale = parameter_layer(d_type,beta =self.betas[1],min_clamp= 0,max_clamp =5)
-            self.alpha = parameter_layer(d_type,beta =self.betas[1],min_clamp= 0.5,max_clamp =5)
+            self.lengthscale = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Softplus(self.betas[0]))
+            self.alpha = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Softplus(self.betas[1]))
             self.sigma = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Sigmoid())
             self.base_intensity = nn.Sequential(nn.Linear(d_type, 1, bias=False), nn.Softplus(self.betas[2]))
 
@@ -367,7 +367,7 @@ class magic_kernel(nn.Module):
                 sigma = self.sigma(combined_embeddings).squeeze(-1)
                 alpha = self.alpha(combined_embeddings).squeeze(-1)
 
-                # self.param_loss = torch.abs(self.lengthscale[0](combined_embeddings)).mean() +torch.abs(self.alpha[0](combined_embeddings)).mean()
+                self.param_loss = torch.abs(self.lengthscale[0](combined_embeddings)).mean()*5 +torch.abs(self.alpha[0](combined_embeddings)).mean()
 
             else:
                 lengthscale = self.lengthscale(combined_embeddings)
@@ -508,15 +508,6 @@ def get_subsequent_mask(seq,diag = 1):
     return subsequent_mask
 
 
-class parameter_layer(nn.Module):
-
-    def __init__(self, d_type=1, beta = 1,min_clamp= 0.0,max_clamp =5.0):
-        super().__init__()
-
-        self.linear_layer = nn.Linear(d_type * 2, 1, bias=False)
-        self.max_clamp = min_clamp
-        self.min_clamp = max_clamp
-        self.beta = beta
 
 
     def forward(self,embeddings):

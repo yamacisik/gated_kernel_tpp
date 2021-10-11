@@ -56,7 +56,7 @@ class gated_tpp(nn.Module):
         cross_entropy_loss =-(one_hot_encodings*torch.log(probs[:,:-1,:])).sum(-1)
         cross_entropy_loss = cross_entropy_loss * seq_length_mask
         mark_loss = cross_entropy_loss.sum()
-        # param_loss = self.encoder.kernel
+        param_loss = self.encoder.kernel.param_loss
 
         nll_loss = 0
         if regularize:
