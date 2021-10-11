@@ -367,6 +367,8 @@ class magic_kernel(nn.Module):
                 sigma = self.sigma(combined_embeddings).squeeze(-1)
                 alpha = self.alpha(combined_embeddings).squeeze(-1)
 
+                self.param_loss = torch.abs(self.lengthscale[0](combined_embeddings)).sum() +torch.abs(self.alpha[0](combined_embeddings)).sum()
+
             else:
                 lengthscale = self.lengthscale(combined_embeddings)
                 sigma = self.sigma(combined_embeddings)
