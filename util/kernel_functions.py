@@ -346,12 +346,18 @@ class magic_kernel(nn.Module):
 
 
         else:
-            self.lengthscale = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Softplus(self.betas[0]))
-            self.alpha = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Softplus(self.betas[1]))
+            # self.lengthscale = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Softplus(self.betas[0]))
+            # self.alpha = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Softplus(self.betas[1]))
+            # self.sigma = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Sigmoid())
+            # self.base_intensity = nn.Sequential(nn.Linear(d_type, 1, bias=False), nn.Softplus(self.betas[2]))
+
+
+            self.lengthscale = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Sigmoid())
+            self.alpha = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Sigmoid())
             self.sigma = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Sigmoid())
-            self.base_intensity = nn.Sequential(nn.Linear(d_type, 1, bias=False), nn.Softplus(self.betas[2]))
-            print(self.betas[1])
-            print(self.regulizing_param)
+            self.base_intensity = nn.Sequential(nn.Linear(d_type, 1, bias=False), nn.Sigmoid())
+
+
     def forward(self, time_diff, combined_embeddings=None,non_event_intensity = False):
 
         d = time_diff
@@ -370,12 +376,14 @@ class magic_kernel(nn.Module):
                 alpha = self.alpha(combined_embeddings).squeeze(-1)
 
                 # self.param_loss = torch.abs(self.lengthscale[0](combined_embeddings)).mean()*5+1*torch.abs(self.alpha[0](combined_embeddings)).mean()
-                self.param_loss = torch.abs(self.alpha[0](combined_embeddings)).mean()
+                self.param_loss = torch.abs(self.alpha[0](combined_embeddings)).mean()*0.5
+                self.param_loss = 0
+
 
             else:
-                lengthscale = 1
+                lengthscale =1
                 sigma = self.sigma(combined_embeddings)
-                alpha = self.alpha(combined_embeddings)
+                alpha = self.alpha(combined_embeddings)*6
 
             base_intensity = self.base_intensity(combined_embeddings[:, :, :, self.d_type:]).squeeze(-1)
 
