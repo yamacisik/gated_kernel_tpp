@@ -54,7 +54,7 @@ parser.add_argument('-sigma', type=float, default=1)
 
 parser.add_argument('-dropout', type=float, default=0.1)
 parser.add_argument('-lr', type=float, default=0.001)
-parser.add_argument('-v', type=float, default=0.0000)
+parser.add_argument('-l2', type=float, default=0.0000)
 parser.add_argument('-seed', type=int, default=42)
 parser.add_argument('-save', type=bool, default=True)
 parser.add_argument('-normalize', type=int, default=0)
