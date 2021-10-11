@@ -190,7 +190,7 @@ class Encoder(nn.Module):
         if self.num_types ==1:
             hidden_vector = temp_enc
         else:
-            hidden_vector  = temp_enc +self.type_emb_prediction(event_type)
+            hidden_vector  = temp_enc +type_embedding
 
         ## Future Masking
         subsequent_mask = get_subsequent_mask(event_type)
