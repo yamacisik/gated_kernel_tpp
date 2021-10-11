@@ -89,7 +89,7 @@ class gated_tpp(nn.Module):
             epoch_loss += batch_loss.item()
             events += ((event_type != 0).sum(-1) - 1).sum()
             # nll_loss.backward()
-            # optimizer.zero_grad()
+            # optimizer.zero_grad()git
 
             batch_loss.backward()
 
