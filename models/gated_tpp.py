@@ -133,7 +133,7 @@ class gated_tpp(nn.Module):
                     last_errors.append(errors[seq_index][idx].unsqueeze(-1))
                     all_errors.append(errors[seq_index][:idx + 1])
                     all_predicted_type.append(predicted_type[seq_index][idx].item())
-                    all_actual_type.append(actual_type[idx].item())
+                    all_actual_type.append(actual_type[seq_index][idx].item())
                     accuracy+=type_prediction_hits[seq_index][idx].item()
 
             last_errors = torch.cat(last_errors)
