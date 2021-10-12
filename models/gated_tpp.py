@@ -190,7 +190,7 @@ class Encoder(nn.Module):
         # temp_enc = self.embedding(event_type) * math.sqrt(self.d_model)
 
         ## Type Encoding
-        type_embedding = self.type_emb(event_type)
+        type_embedding = self.type_emb(event_type) * math.sqrt(self.d_model)
         xd_bar, xd = get_pairwise_type_embeddings(type_embedding)
         combined_embeddings = torch.cat([xd_bar, xd], dim=-1)
 
