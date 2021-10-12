@@ -405,7 +405,7 @@ class magic_kernel(nn.Module):
 
         # (sigma ** 2) * (1 + (d ** 2) / (self.alpha * lengthscale ** 2)) ** (-self.alpha)
         # (sigma ** 2) * (1 + (d ** 2) / (self.alpha * lengthscale ** 2)) ** (-self.alpha) *((1 + torch.exp(-d)) ** -alpha) +base_intensity
-        self.scores = (sigma * torch.exp(-d / lengthscale) * ((1 + torch.exp(-d)) ** -alpha))
+        self.scores = (sigma *alpha* torch.exp(-d / lengthscale) * ((1 + torch.exp(-d)) ** -alpha))
         # self.scores = sigma*(alpha/lengthscale)*torch.exp(-d/lengthscale)*(1+torch.exp(-d/lengthscale))**(-1-alpha)
 
         return self.scores
