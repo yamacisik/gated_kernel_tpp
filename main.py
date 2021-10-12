@@ -235,7 +235,7 @@ with open(r'results.csv', 'a', newline='') as f:
     writer = csv.writer(f)
     writer.writerow(results_to_record)
 
-with open(r'learned_params.csv', 'a', newline='') as f:
+with open(r'learned_params_2.csv', 'a', newline='') as f:
     writer = csv.writer(f)
     writer.writerow(params_to_record)
 
