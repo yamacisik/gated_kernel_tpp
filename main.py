@@ -82,7 +82,7 @@ np.random.seed(params.seed)
 # use_cuda = torch.cuda.is_available()
 if torch.cuda.is_available():
     device = 'cuda'
-    torch.cuda.synchronize()
+
     # torch.set_default_tensor_type(cuda_tensor)
     torch.cuda.manual_seed(seed=params.seed)
     torch.cuda.manual_seed_all(params.seed)
@@ -161,6 +161,7 @@ parameters = []
 print("the number of trainable parameters: " + str(count_parameters(model)))
 start_time = time.time()
 for epoch in range(params.epoch):
+    torch.cuda.synchronize()
     train_epoch_loss, _ = model.train_epoch(trainloader, optimizer, params)
     # valid_epoch_loss, _, val_RMSE, val_all_RMSE,val_accuracy = model.validate_epoch(valloader, device = params.device,regularize=params.regularize)
     # test_epoch_loss, _, test_RMSE, test_all_RMSE,test_accuracy = model.validate_epoch(testloader, device = params.device,regularize=params.regularize)
