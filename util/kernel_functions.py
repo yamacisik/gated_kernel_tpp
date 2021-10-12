@@ -592,7 +592,7 @@ class magic_kernel_2(nn.Module):
 
                 self.param_loss= 0
                 self.param_loss += torch.abs(self.lengthscale[0](combined_embeddings)).mean()*5
-                self.param_loss = torch.abs(self.l[0](combined_embeddings)).mean() * 1
+                self.param_loss = torch.abs(self.l[0](combined_embeddings)).mean() * 5
 
                 # self.param_loss = torch.abs(self.alpha[0](combined_embeddings)).mean()*0.5
                 # self.param_loss = 0
@@ -612,7 +612,7 @@ class magic_kernel_2(nn.Module):
         # (sigma ** 2) * (1 + (d ** 2) / (self.alpha * lengthscale ** 2)) ** (-self.alpha)
         # (sigma ** 2) * (1 + (d ** 2) / (self.alpha * lengthscale ** 2)) ** (-self.alpha) *((1 + torch.exp(-d)) ** -alpha) +base_intensity
 
-        k1 = 1 + torch.tanh((d - l + 1) / 1)
+        k1 = 1 + torch.tanh((d - l + 1) / s)
         k2 = torch.exp(-(d ** 2) / lengthscale ** 2)
         self.scores = k1*k2
         # self.scores = sigma*(alpha/lengthscale)*torch.exp(-d/lengthscale)*(1+torch.exp(-d/lengthscale))**(-1-alpha)
