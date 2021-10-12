@@ -197,7 +197,8 @@ if num_types>1:
     sigmas = kernel.sigma(combined_embeddings).cpu().detach().numpy().flatten().tolist()
     base_intensities = []
     for i in range(1,num_types+1):
-        embedding = model.encoder.type_emb(torch.tensor(1).to(device))
+        embedding = model.encoder.type_emb(torch.tensor(i).to(device))
+        base_intensity = model.encoder.kernel.base_intensity(embedding).item()
         base_intensities.append(embedding)
 
 

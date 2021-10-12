@@ -355,7 +355,7 @@ class magic_kernel(nn.Module):
             self.lengthscale = nn.Sequential(nn.Linear(d_type * 2, d_type, bias=False),nn.ReLU(),nn.Linear(d_type , 1, bias=False), nn.Sigmoid())
             self.alpha = nn.Sequential(nn.Linear(d_type * 2, d_type, bias=False),nn.ReLU(),nn.Linear(d_type , 1, bias=False), nn.Sigmoid())
             self.sigma = nn.Sequential(nn.Linear(d_type * 2, d_type, bias=False),nn.ReLU(),nn.Linear(d_type , 1, bias=False), nn.Sigmoid())
-            self.base_intensity = nn.Sequential(nn.Linear(d_type, 1, bias=False), nn.Sigmoid())
+            # self.base_intensity = nn.Sequential(nn.Linear(d_type, 1, bias=False), nn.Sigmoid())
 
             #
             # self.parameter_layer = nn.Sequential(nn.Linear(d_type * 2, 3, bias=False), nn.Sigmoid())
@@ -380,7 +380,7 @@ class magic_kernel(nn.Module):
                 lengthscale = self.lengthscale(combined_embeddings).squeeze(-1)*3
                 sigma = self.sigma(combined_embeddings).squeeze(-1)
                 alpha = self.alpha(combined_embeddings).squeeze(-1)*6
-                base_intensity = self.base_intensity(combined_embeddings[:, :, :, self.d_type:]).squeeze(-1)
+                # base_intensity = self.base_intensity(combined_embeddings[:, :, :, self.d_type:]).squeeze(-1)
 
                 # lengthscale = self.parameter_layer(combined_embeddings)[:,:,:,0].squeeze(-1)*3
                 # sigma = self.parameter_layer(combined_embeddings)[:, :,:, 1].squeeze(-1)
@@ -401,11 +401,11 @@ class magic_kernel(nn.Module):
                 sigma = self.parameter_layer(combined_embeddings)[:, :, 1]
                 alpha = self.parameter_layer(combined_embeddings)[:, :, 2]*6
 
-                base_intensity = self.base_intensity(combined_embeddings[:, :, :, self.d_type:]).squeeze(-1)
+                # base_intensity = self.base_intensity(combined_embeddings[:, :, :, self.d_type:]).squeeze(-1)
 
         # (sigma ** 2) * (1 + (d ** 2) / (self.alpha * lengthscale ** 2)) ** (-self.alpha)
         # (sigma ** 2) * (1 + (d ** 2) / (self.alpha * lengthscale ** 2)) ** (-self.alpha) *((1 + torch.exp(-d)) ** -alpha) +base_intensity
-        self.scores = (sigma * torch.exp(-d / lengthscale) * ((1 + torch.exp(-d)) ** -alpha))+base_intensity
+        self.scores = (sigma * torch.exp(-d / lengthscale) * ((1 + torch.exp(-d)) ** -alpha))
         # self.scores = sigma*(alpha/lengthscale)*torch.exp(-d/lengthscale)*(1+torch.exp(-d/lengthscale))**(-1-alpha)
 
         return self.scores
