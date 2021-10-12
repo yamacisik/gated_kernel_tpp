@@ -233,34 +233,6 @@ class SigmoidGate(nn.Module):
 
 
 
-
-
-
-
-class space_time_kernel(nn.Module):
-
-    def __init__(self, sigma=1, norm=1,length_scale = 1.0,alpha = 0.1):
-        super().__init__()
-
-
-        self.norm = norm
-        self.sigma = sigma
-        self.length_scale = length_scale
-        self.alpha = alpha
-        self.scores = None
-
-    def forward(self, x):
-
-        if len(x[0].size()) > 3:
-            d = (torch.abs(x[0] - x[1]) ** self.norm).sum(-1) ** (1 / self.norm)
-        else:
-            d = torch.abs(x[0] - x[1])
-
-        # self.scores = (self.sigma ** 2) * torch.exp(-(d ** 2) / self.length_scale ** 2)
-        self.scores = (self.sigma ** 2) * (1 + (d ** 2) / (self.alpha * self.length_scale ** 2)) ** (-self.alpha)
-        return self.scores
-
-
 class rational_quadratic_kernel(nn.Module):
 
     def __init__(self,
@@ -543,3 +515,110 @@ def get_subsequent_mask(seq,diag = 1):
         return F.softplus(torch.clamp(parameter,self.min_clamp,self.max_clamp),beta = self.beta)
 
 
+class magic_kernel_2(nn.Module):
+
+    def __init__(self,
+                 num_types=1, d_type=1, sigma=1, p=1, alpha=1, regulizing_param=5.0, betas=[0.4, 0.3, 1]):
+        super().__init__()
+
+        self.d_type = d_type
+        self.num_types = num_types
+        self.norm = p
+        self.param_loss = 0
+        self.scores = None
+        self.sigma = sigma
+        self.alpha = alpha
+        self.regulizing_param = regulizing_param
+        self.betas = betas
+
+        """
+        If the model is 1-D we still need the type embedding as an input and train a linear layer followed by softplus
+        to make sure the length_scale parameter is positive. Adding a parameter followed by a sigmoid creates a non leaf
+        tensor and there for doesn't work.
+        """
+
+        if num_types == 1:
+
+            self.lengthscale = torch.nn.Parameter(torch.randn(1))
+            self.sigma = torch.nn.Parameter(torch.randn(1))
+            self.l = torch.nn.Parameter(torch.randn(1))
+            self.s = torch.nn.Parameter(torch.randn(1))
+
+
+
+        else:
+            self.lengthscale = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Softplus(self.betas[0]))
+            self.sigma = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Sigmoid())
+            self.l = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Softplus(self.betas[1]))
+            self.s = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Sigmoid())
+            # self.base_intensity = nn.Sequential(nn.Linear(d_type, 1, bias=False), nn.Softplus(self.betas[2]))
+
+
+            # self.lengthscale = nn.Sequential(nn.Linear(d_type * 2, d_type, bias=False),nn.ReLU(),nn.Linear(d_type , 1, bias=False), nn.Sigmoid())
+            # self.alpha = nn.Sequential(nn.Linear(d_type * 2, d_type, bias=False),nn.ReLU(),nn.Linear(d_type , 1, bias=False), nn.Sigmoid())
+            # self.sigma = nn.Sequential(nn.Linear(d_type * 2, d_type, bias=False),nn.ReLU(),nn.Linear(d_type , 1, bias=False), nn.Sigmoid())
+            # self.base_intensity = nn.Sequential(nn.Linear(d_type, 1, bias=False), nn.Sigmoid())
+
+            #
+            # self.parameter_layer = nn.Sequential(nn.Linear(d_type * 2, 3, bias=False), nn.Sigmoid())
+
+
+            # self.base_intensity = nn.Sequential(nn.Linear(d_type, 1, bias=False), nn.Sigmoid())
+
+
+    def forward(self, time_diff, combined_embeddings=None,non_event_intensity = False):
+
+        d = time_diff
+
+        if self.num_types == 1:
+            lengthscale = F.softplus(self.lengthscale,self.betas[0])
+            sigma = torch.sigmoid(self.sigma)
+            # sigma = 1
+            alpha = F.softplus(self.alpha,self.betas[1])
+            # base_intensity = F.softplus(self.base_intensity,self.betas[2])
+
+        else:
+            if not non_event_intensity:
+                lengthscale = self.lengthscale(combined_embeddings).squeeze(-1)
+                sigma = self.sigma(combined_embeddings).squeeze(-1)
+                l =  self.l(combined_embeddings).squeeze(-1)-1
+                s =  self.s(combined_embeddings).squeeze(-1)
+
+                # base_intensity = self.base_intensity(combined_embeddings[:, :, :, self.d_type:]).squeeze(-1)
+
+                # lengthscale = self.parameter_layer(combined_embeddings)[:,:,:,0].squeeze(-1)*3
+                # sigma = self.parameter_layer(combined_embeddings)[:, :,:, 1].squeeze(-1)
+                # alpha = self.parameter_layer(combined_embeddings)[:, :,:, 2].squeeze(-1)*6
+
+                self.param_loss= 0
+                self.param_loss += torch.abs(self.lengthscale[0](combined_embeddings)).mean()*5
+                self.param_loss = torch.abs(self.l[0](combined_embeddings)).mean() * 1
+
+                # self.param_loss = torch.abs(self.alpha[0](combined_embeddings)).mean()*0.5
+                # self.param_loss = 0
+
+
+            else:
+                # lengthscale =self.lengthscale(combined_embeddings)*3
+                # sigma = self.sigma(combined_embeddings)
+                # alpha = self.alpha(combined_embeddings)*6
+
+                lengthscale = self.parameter_layer(combined_embeddings)[:,:,0]*3
+                sigma = self.parameter_layer(combined_embeddings)[:, :, 1]
+                alpha = self.parameter_layer(combined_embeddings)[:, :, 2]*6
+
+                # base_intensity = self.base_intensity(combined_embeddings[:, :, :, self.d_type:]).squeeze(-1)
+
+        # (sigma ** 2) * (1 + (d ** 2) / (self.alpha * lengthscale ** 2)) ** (-self.alpha)
+        # (sigma ** 2) * (1 + (d ** 2) / (self.alpha * lengthscale ** 2)) ** (-self.alpha) *((1 + torch.exp(-d)) ** -alpha) +base_intensity
+
+        k1 = 1 + torch.tanh((d - l + 1) / s)
+        k2 = torch.exp(-(d ** 2) / lengthscale ** 2)
+        self.scores = k1*k2
+        # self.scores = sigma*(alpha/lengthscale)*torch.exp(-d/lengthscale)*(1+torch.exp(-d/lengthscale))**(-1-alpha)
+
+        return self.scores
+
+    def regularizer_loss(self):
+
+        return self.lengthscale + self.sigma
