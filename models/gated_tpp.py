@@ -183,14 +183,14 @@ class Encoder(nn.Module):
 
         # Temporal Encoding
 
-        temp_enc = self.embedding(event_type, event_time) * math.sqrt(self.d_model)
+        temp_enc = self.embedding(event_type, event_time)
 
         # temp_enc = self.embedding(event_type, torch.cat([torch.zeros(event_time.size()[0], 1).to(event_time.device), event_time], dim=-1))
         # temp_enc =  (temp_enc[:, 1:, :] - temp_enc[:, :-1, :])
         # temp_enc = self.embedding(event_type) * math.sqrt(self.d_model)
 
         ## Type Encoding
-        type_embedding = self.type_emb(event_type) * math.sqrt(self.d_model)
+        type_embedding = self.type_emb(event_type)
         xd_bar, xd = get_pairwise_type_embeddings(type_embedding)
         combined_embeddings = torch.cat([xd_bar, xd], dim=-1)
 
