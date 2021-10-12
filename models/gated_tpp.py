@@ -174,7 +174,7 @@ class Encoder(nn.Module):
         self.w_k = torch.tensor([math.pow(10000.0, 2.0 * ((i // 2) + 1) / d_model) for i in range(d_model)])
         self.sigmoid = kernel_functions.rational_quadratic_kernel(num_types, d_type)
         # self.kernel = getattr(kernel_functions, kernel_type +'_kernel')(num_types, d_type, norm=1)
-        self.kernel = kernel_functions.magic_kernel(num_types, d_type,regulizing_param = regulizing_param,betas = betas)
+        self.kernel = kernel_functions.magic_kernel_2(num_types, d_type,regulizing_param = regulizing_param,betas = betas)
         self.softmax = test_softmax
         self.embed_time = embed_time
 

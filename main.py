@@ -42,8 +42,8 @@ parser.add_argument('-length_scale', type=float, default=1.0)
 parser.add_argument('-l', type=float, default=1.0)
 parser.add_argument('-s', type=float, default=1.0)
 parser.add_argument('-reg_param', type=float, default=5.0)
-parser.add_argument('-beta_1', type=float, default=1.0)
-parser.add_argument('-beta_2', type=float, default=1.0)
+parser.add_argument('-beta_1', type=float, default=0.4)
+parser.add_argument('-beta_2', type=float, default=0.3)
 parser.add_argument('-beta_3', type=float, default=1.0)
 
 
@@ -197,7 +197,9 @@ if num_types>1:
     # alphas= kernel.parameter_layer(combined_embeddings)[:, :, :, 2].squeeze(-1).cpu().detach().numpy().flatten().tolist()
 
     lengthscales = kernel.lengthscale(combined_embeddings).cpu().detach().numpy().flatten().tolist()
-    alphas = kernel.alpha(combined_embeddings).cpu().detach().numpy().flatten().tolist()
+    # alphas = kernel.alpha(combined_embeddings).cpu().detach().numpy().flatten().tolist()
+    ls = kernel.l(combined_embeddings).cpu().detach().numpy().flatten().tolist()
+    ss = kernel.s(combined_embeddings).cpu().detach().numpy().flatten().tolist()
     sigmas = kernel.sigma(combined_embeddings).cpu().detach().numpy().flatten().tolist()
     base_intensities = []
     for i in range(1,num_types+1):
@@ -216,7 +218,10 @@ else:
 
 model_name =secrets.token_hex(5)
 
-params_to_record = lengthscales +sigmas +alphas+base_intensities +kernel.betas
+# params_to_record = lengthscales +sigmas +alphas+base_intensities +kernel.betas
+
+params_to_record = ls +sigmas +lengthscales+ss +kernel.betas
+
 
 params_to_record = [str(model_name)] +params_to_record
 results_to_record = [str(params.data), str(params.epoch), str(params.batch_size), str(params.d_model),
