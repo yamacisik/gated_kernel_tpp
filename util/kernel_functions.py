@@ -348,7 +348,7 @@ class magic_kernel(nn.Module):
         else:
             self.lengthscale = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Softplus(self.betas[0]))
             self.alpha = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Softplus(self.betas[1]))
-            self.sigma = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Sigmoid())
+            self.sigma = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Softplus(self.betas[2]))
             # self.base_intensity = nn.Sequential(nn.Linear(d_type, 1, bias=False), nn.Softplus(self.betas[2]))
 
 
