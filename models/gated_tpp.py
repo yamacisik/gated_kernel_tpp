@@ -25,7 +25,7 @@ class gated_tpp(nn.Module):
                                kernel_type=kernel_type, alpha=alpha, test_softmax=softmax, embed_time=embed_time,
                                timetovec=timetovec, s=s, l=l, p=p,sigma= sigma,regulizing_param=regulizing_param,betas = betas)
         self.norm = nn.LayerNorm(d_model, eps=1e-6)
-        self.decoder = Decoder(num_types, d_model, dropout)
+        self.decoder = Decoder(num_types, d_model+d_type, dropout)
 
     def forward(self, event_type, event_time, arrival_times):
         scores, embeddings, _ = self.encoder(event_type, event_time, arrival_times)
@@ -172,15 +172,14 @@ class Encoder(nn.Module):
 
         # Temporal Encoding
 
-        temp_enc = self.embedding(event_type, event_time)
+        temp_enc = self.embedding(event_type, event_time) * math.sqrt(self.d_model)
 
         # temp_enc = self.embedding(event_type, torch.cat([torch.zeros(event_time.size()[0], 1).to(event_time.device), event_time], dim=-1))
         # temp_enc =  (temp_enc[:, 1:, :] - temp_enc[:, :-1, :])
         # temp_enc = self.embedding(event_type) * math.sqrt(self.d_model)
 
         ## Type Encoding
-        type_embedding = self.type_emb(event_type)* math.sqrt(self.d_model)
-
+        type_embedding = self.type_emb(event_type)
         xd_bar, xd = get_pairwise_type_embeddings(type_embedding)
         combined_embeddings = torch.cat([xd_bar, xd], dim=-1)
 
@@ -191,9 +190,7 @@ class Encoder(nn.Module):
         if self.num_types ==1:
             hidden_vector = temp_enc
         else:
-            # hidden_vector = torch.cat([temp_enc, type_embedding],dim = -1)
-            hidden_vector = temp_enc +type_embedding
-
+            hidden_vector = torch.cat([temp_enc, type_embedding],dim =-1)
 
         ## Future Masking
         subsequent_mask = get_subsequent_mask(event_type)
