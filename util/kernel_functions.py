@@ -358,7 +358,7 @@ class magic_kernel(nn.Module):
             # self.base_intensity = nn.Sequential(nn.Linear(d_type, 1, bias=False), nn.Sigmoid())
 
             #
-            self.parameter_layer = nn.Sequential(nn.Linear(d_type * 2, d_type, bias=False),nn.ReLU(),nn.Linear(d_type , 3, bias=False), nn.Sigmoid())
+            self.parameter_layer = nn.Sequential(nn.Linear(d_type * 2, 3, bias=False), nn.Sigmoid())
 
 
             # self.base_intensity = nn.Sequential(nn.Linear(d_type, 1, bias=False), nn.Sigmoid())
