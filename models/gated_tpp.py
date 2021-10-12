@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import math
 import sys
-
+from sklearn.metrics import f1_score
 sys.path.append('../util')
 sys.path.append('util')
 
@@ -104,6 +104,8 @@ class gated_tpp(nn.Module):
         with torch.no_grad():
             last_errors = []
             all_errors = []
+            all_predicted_type = []
+            all_actual_type=  []
             accuracy = 0
             for batch in dataloader:
                 event_time, arrival_time, event_type, _ = map(lambda x: x.to(device), batch)
@@ -124,9 +126,14 @@ class gated_tpp(nn.Module):
                 predicted_events = torch.argmax(probs,dim = -1)+1 ## Events go from 1 to N in the dataset
                 type_prediction_hits = (predicted_events[:, :-1] ==event_type[:, 1:])*1
 
+                ## Clean Up TO DO
+                actual_type = event_type[:, 1:]
+                predicted_type =predicted_events[:, :-1]
                 for idx in last_event_index:
                     last_errors.append(errors[seq_index][idx].unsqueeze(-1))
                     all_errors.append(errors[seq_index][:idx + 1])
+                    all_predicted_type.append(predicted_type[seq_index][idx].item())
+                    all_actual_type.append(actual_type[idx].item())
                     accuracy+=type_prediction_hits[seq_index][idx].item()
 
             last_errors = torch.cat(last_errors)
@@ -134,6 +141,10 @@ class gated_tpp(nn.Module):
             all_errors = torch.cat(all_errors)
             all_RMSE = (all_errors ** 2).mean().sqrt()
             last_event_accuracy = accuracy/len(dataloader.dataset.event_type)
+
+            f_score = f1_score(all_actual_type, all_predicted_type, average='micro')
+
+            print(f'Micro F-1:{f_score}')
         return epoch_loss, events, all_RMSE, last_RMSE,last_event_accuracy
 
 
