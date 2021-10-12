@@ -43,7 +43,7 @@ parser.add_argument('-l', type=float, default=1.0)
 parser.add_argument('-s', type=float, default=1.0)
 parser.add_argument('-reg_param', type=float, default=5.0)
 parser.add_argument('-beta_1', type=float, default=0.4)
-parser.add_argument('-beta_2', type=float, default=0.2)
+parser.add_argument('-beta_2', type=float, default=0.3)
 parser.add_argument('-beta_3', type=float, default=1.0)
 
 
