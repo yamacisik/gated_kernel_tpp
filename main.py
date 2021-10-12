@@ -191,13 +191,13 @@ if num_types>1:
     print(embeddings.shape)
     xd_bar, xd = get_pairwise_type_embeddings(embeddings)
     combined_embeddings = torch.cat([xd_bar, xd], dim=-1)
-    lengthscales= kernel.parameter_layer(combined_embeddings)[:, :, :, 0].squeeze(-1).cpu().detach().numpy().flatten().tolist()
-    sigmas= kernel.parameter_layer(combined_embeddings)[:, :, :, 1].squeeze(-1).cpu().detach().numpy().flatten().tolist()
-    alphas= kernel.parameter_layer(combined_embeddings)[:, :, :, 2].squeeze(-1).cpu().detach().numpy().flatten().tolist()
+    # lengthscales= kernel.parameter_layer(combined_embeddings)[:, :, :, 0].squeeze(-1).cpu().detach().numpy().flatten().tolist()
+    # sigmas= kernel.parameter_layer(combined_embeddings)[:, :, :, 1].squeeze(-1).cpu().detach().numpy().flatten().tolist()
+    # alphas= kernel.parameter_layer(combined_embeddings)[:, :, :, 2].squeeze(-1).cpu().detach().numpy().flatten().tolist()
 
-    # lengthscales = kernel.lengthscale(combined_embeddings).cpu().detach().numpy().flatten().tolist()
-    # alphas = kernel.alpha(combined_embeddings).cpu().detach().numpy().flatten().tolist()
-    # sigmas = kernel.sigma(combined_embeddings).cpu().detach().numpy().flatten().tolist()
+    lengthscales = kernel.lengthscale(combined_embeddings).cpu().detach().numpy().flatten().tolist()
+    alphas = kernel.alpha(combined_embeddings).cpu().detach().numpy().flatten().tolist()
+    sigmas = kernel.sigma(combined_embeddings).cpu().detach().numpy().flatten().tolist()
     base_intensities = []
     for i in range(1,num_types+1):
         # embedding = model.encoder.type_emb(torch.tensor(i).to(device))

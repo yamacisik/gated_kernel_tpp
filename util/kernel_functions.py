@@ -377,14 +377,14 @@ class magic_kernel(nn.Module):
 
         else:
             if not non_event_intensity:
-                # lengthscale = self.lengthscale(combined_embeddings).squeeze(-1)*3
-                # sigma = self.sigma(combined_embeddings).squeeze(-1)
-                # alpha = self.alpha(combined_embeddings).squeeze(-1)*6
+                lengthscale = self.lengthscale(combined_embeddings).squeeze(-1)*3
+                sigma = self.sigma(combined_embeddings).squeeze(-1)
+                alpha = self.alpha(combined_embeddings).squeeze(-1)*6
                 # base_intensity = self.base_intensity(combined_embeddings[:, :, :, self.d_type:]).squeeze(-1)
 
-                lengthscale = self.parameter_layer(combined_embeddings)[:,:,:,0].squeeze(-1)*3
-                sigma = self.parameter_layer(combined_embeddings)[:, :,:, 1].squeeze(-1)
-                alpha = self.parameter_layer(combined_embeddings)[:, :,:, 2].squeeze(-1)*6
+                # lengthscale = self.parameter_layer(combined_embeddings)[:,:,:,0].squeeze(-1)*3
+                # sigma = self.parameter_layer(combined_embeddings)[:, :,:, 1].squeeze(-1)
+                # alpha = self.parameter_layer(combined_embeddings)[:, :,:, 2].squeeze(-1)*6
 
 
                 # self.param_loss = torch.abs(self.lengthscale[0](combined_embeddings)).mean()*5+1*torch.abs(self.alpha[0](combined_embeddings)).mean()
