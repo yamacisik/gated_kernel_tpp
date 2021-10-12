@@ -82,11 +82,13 @@ np.random.seed(params.seed)
 # use_cuda = torch.cuda.is_available()
 if torch.cuda.is_available():
     device = 'cuda'
+    torch.cuda.synchronize()
     # torch.set_default_tensor_type(cuda_tensor)
     torch.cuda.manual_seed(seed=params.seed)
     torch.cuda.manual_seed_all(params.seed)
     # torch.backends.cudnn.deterministic = True
     # torch.backends.cudnn.benchmark = False
+
 else:
     # torch.set_default_tensor_type(cpu_tensor)
     device = 'cpu'
