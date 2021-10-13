@@ -550,7 +550,7 @@ class magic_kernel_2(nn.Module):
             self.lengthscale = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Softplus(self.betas[0]))
             self.sigma = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Sigmoid())
             self.alpha = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Softplus(self.betas[1]))
-            self.s = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Sigmoid())
+            # self.s = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Sigmoid())
             # self.base_intensity = nn.Sequential(nn.Linear(d_type, 1, bias=False), nn.Softplus(self.betas[2]))
 
 
@@ -580,21 +580,15 @@ class magic_kernel_2(nn.Module):
         else:
             if not non_event_intensity:
                 lengthscale = self.lengthscale(combined_embeddings).squeeze(-1)
-                sigma = self.sigma(combined_embeddings).squeeze(-1)*2
+                sigma = self.sigma(combined_embeddings).squeeze(-1)
                 alpha = self.alpha(combined_embeddings).squeeze(-1)
                 # l =  self.l(combined_embeddings).squeeze(-1)
                 # s =  self.s(combined_embeddings).squeeze(-1)
 
-                # base_intensity = self.base_intensity(combined_embeddings[:, :, :, self.d_type:]).squeeze(-1)
-
-                # lengthscale = self.parameter_layer(combined_embeddings)[:,:,:,0].squeeze(-1)*3
-                # sigma = self.parameter_layer(combined_embeddings)[:, :,:, 1].squeeze(-1)
-                # alpha = self.parameter_layer(combined_embeddings)[:, :,:, 2].squeeze(-1)*6
-
                 self.param_loss= 0
-                self.param_loss += torch.abs(self.lengthscale[0](combined_embeddings)).mean()*1
-                self.param_loss += torch.abs(self.sigma[0](combined_embeddings)).mean() * 1
-                self.param_loss += torch.abs(self.alpha[0](combined_embeddings)).mean()*1
+                # self.param_loss += torch.abs(self.lengthscale[0](combined_embeddings)).mean()*1
+                # self.param_loss += torch.abs(self.sigma[0](combined_embeddings)).mean() * 1
+                # self.param_loss += torch.abs(self.alpha[0](combined_embeddings)).mean()*1
                 # self.param_loss += torch.abs(self.s[0](combined_embeddings)).mean() * 1
                 # self.param_loss = torch.abs(self.alpha[0](combined_embeddings)).mean()*0.5
                 # self.param_loss = 0
