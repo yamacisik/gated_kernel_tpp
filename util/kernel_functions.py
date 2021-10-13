@@ -610,7 +610,7 @@ class magic_kernel_2(nn.Module):
 
                 # base_intensity = self.base_intensity(combined_embeddings[:, :, :, self.d_type:]).squeeze(-1)
 
-        k1 = 1 + torch.tanh((d - l +2) / s)
+        k1 = (1 + torch.tanh((d - l +2) / s))/2
         alpha = 1
         k2 =  (1 + (d ** 2) / (alpha * lengthscale ** 2)) ** (-alpha)
         # k2 = torch.exp(-(d) / lengthscale)
