@@ -614,7 +614,7 @@ class magic_kernel_2(nn.Module):
 
         k1 = 1 + torch.tanh((d - l + 1) / s)
         k2 = torch.exp(-(d) / lengthscale)
-        self.scores = k1*k2
+        self.scores = sigma*(k1)*(k2)
         # self.scores = sigma*(alpha/lengthscale)*torch.exp(-d/lengthscale)*(1+torch.exp(-d/lengthscale))**(-1-alpha)
 
         return self.scores
