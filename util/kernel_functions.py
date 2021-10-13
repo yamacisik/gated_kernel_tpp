@@ -548,8 +548,8 @@ class magic_kernel_2(nn.Module):
 
         else:
             self.lengthscale = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Softplus(self.betas[0]))
-            self.sigma = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Sigmoid())
-            self.l = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Softplus(self.betas[1]))
+            self.sigma = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Softplus())
+            self.alpha = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Softplus(self.betas[1]))
             self.s = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Sigmoid())
             # self.base_intensity = nn.Sequential(nn.Linear(d_type, 1, bias=False), nn.Softplus(self.betas[2]))
 
@@ -581,8 +581,9 @@ class magic_kernel_2(nn.Module):
             if not non_event_intensity:
                 lengthscale = self.lengthscale(combined_embeddings).squeeze(-1)
                 sigma = self.sigma(combined_embeddings).squeeze(-1)
-                l =  self.l(combined_embeddings).squeeze(-1)-1
-                s =  self.s(combined_embeddings).squeeze(-1)
+                alpha = self.alpha(combined_embeddings).squeeze(-1)
+                # l =  self.l(combined_embeddings).squeeze(-1)
+                # s =  self.s(combined_embeddings).squeeze(-1)
 
                 # base_intensity = self.base_intensity(combined_embeddings[:, :, :, self.d_type:]).squeeze(-1)
 
@@ -592,7 +593,7 @@ class magic_kernel_2(nn.Module):
 
                 self.param_loss= 0
                 # self.param_loss += torch.abs(self.lengthscale[0](combined_embeddings)).mean()*6
-                self.param_loss += torch.abs(self.l[0](combined_embeddings)).mean() * 5
+                # self.param_loss += torch.abs(self.l[0](combined_embeddings)).mean() * 5
                 # self.param_loss += torch.abs(self.sigma[0](combined_embeddings)).mean()*1
                 # self.param_loss += torch.abs(self.s[0](combined_embeddings)).mean() * 1
                 # self.param_loss = torch.abs(self.alpha[0](combined_embeddings)).mean()*0.5
@@ -610,10 +611,13 @@ class magic_kernel_2(nn.Module):
 
                 # base_intensity = self.base_intensity(combined_embeddings[:, :, :, self.d_type:]).squeeze(-1)
 
-        k1 = (1 + torch.tanh((d - l ) / s))
+        # k1 = (1 + torch.tanh((d - l ) / s))
+        k1 = (1 + torch.exp(-d))**(-alpha*2)
+
         alpha = 1
-        k2 =  (1 + (d ** 2) / (alpha * lengthscale ** 2)) ** (-alpha)
-        # k2 = torch.exp(-(d) / lengthscale)
+
+        # k2 =  (1 + (d ** 2) / (alpha * lengthscale ** 2)) ** (-alpha)
+        k2 = torch.exp(-(d) / lengthscale)
         scores = (sigma**2)*(k1)*(k2)
         # self.scores = sigma*(alpha/lengthscale)*torch.exp(-d/lengthscale)*(1+torch.exp(-d/lengthscale))**(-1-alpha)
 
