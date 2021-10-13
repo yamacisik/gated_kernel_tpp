@@ -593,7 +593,7 @@ class magic_kernel_2(nn.Module):
                 self.param_loss= 0
                 self.param_loss += torch.abs(self.lengthscale[0](combined_embeddings)).mean()*5
                 self.param_loss += torch.abs(self.l[0](combined_embeddings)).mean() * 2
-                self.param_loss +=torch.abs(self.sigma[0](combined_embeddings)).mean() * 1
+                self.param_loss +=torch.abs(self.sigma[0](combined_embeddings)).mean()
                 # self.param_loss = torch.abs(self.alpha[0](combined_embeddings)).mean()*0.5
                 # self.param_loss = 0
 
