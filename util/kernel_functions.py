@@ -610,14 +610,14 @@ class magic_kernel_2(nn.Module):
 
                 # base_intensity = self.base_intensity(combined_embeddings[:, :, :, self.d_type:]).squeeze(-1)
 
-        k1 = 1 + torch.tanh((d - l +1) / s)
+        k1 = 1 + torch.tanh((d - l +2) / s)
         alpha = 1
         k2 =  (1 + (d ** 2) / (alpha * lengthscale ** 2)) ** (-alpha)
         # k2 = torch.exp(-(d) / lengthscale)
-        self.scores = (sigma**2)*(k1)*(k2)
+        scores = (sigma**2)*(k1)*(k2)
         # self.scores = sigma*(alpha/lengthscale)*torch.exp(-d/lengthscale)*(1+torch.exp(-d/lengthscale))**(-1-alpha)
 
-        return self.scores
+        return scores
 
     def regularizer_loss(self):
 
