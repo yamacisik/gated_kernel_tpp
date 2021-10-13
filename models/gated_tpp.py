@@ -169,10 +169,8 @@ class Encoder(nn.Module):
         self.type_emb = nn.Embedding(num_types + 1, d_type, padding_idx=0)
         self.type_emb_prediction = nn.Embedding(num_types + 1, d_type, padding_idx=0)
 
-        # self.w_k = torch.tensor([math.pow(10000.0, 2.0 * (i) / d_model) for i in range(d_model)])
 
         self.w_k = torch.tensor([math.pow(10000.0, 2.0 * ((i // 2) + 1) / d_model) for i in range(d_model)])
-        self.sigmoid = kernel_functions.rational_quadratic_kernel(num_types, d_type)
         # self.kernel = getattr(kernel_functions, kernel_type +'_kernel')(num_types, d_type, norm=1)
         self.kernel = kernel_functions.magic_kernel_2(num_types, d_type,regulizing_param = regulizing_param,betas = betas)
         self.softmax = test_softmax
