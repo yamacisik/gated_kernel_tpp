@@ -18,16 +18,10 @@
 #python main.py -data 2_d_hawkes -d_model 16 -d_type 16 -kernel_type 2  -epoch 50 -lr 0.0001 -batch 30  -timetovec 0 -softmax 0 -regularize 0
 #python main.py -data 2_d_hawkes -d_model 32 -d_type 32 -kernel_type 2  -epoch 50 -lr 0.0001 -batch 30  -timetovec 0 -softmax 0 -regularize 0
 
-
+python main.py -data 2_d_hawkes -d_model 10 -d_type 10 -kernel_type 2  -epoch 50 -lr 0.00005 -batch 30  -timetovec 0 -softmax 0 -regularize 0 -beta_1 0.4 -beta_2 0.4
+python main.py -data 2_d_hawkes -d_model 20 -d_type 20 -kernel_type 2  -epoch 50 -lr 0.00005 -batch 30  -timetovec 0 -softmax 0 -regularize 0 -beta_1 0.4 -beta_2 0.4
 python main.py -data 2_d_hawkes -d_model 24 -d_type 24 -kernel_type 2  -epoch 50 -lr 0.00005 -batch 30  -timetovec 0 -softmax 0 -regularize 0 -beta_1 0.4 -beta_2 0.4
-#python main.py -data 2_d_hawkes -d_model 32 -d_type 32 -kernel_type 2  -epoch 25 -lr 0.00005 -batch 30  -timetovec 1 -softmax 0 -regularize 0 -beta_1 0.4 -beta_2 0.4
-
-#python main.py -data 2_d_hawkes -d_model 32 -d_type 32 -kernel_type 2  -epoch 50 -lr 0.0001 -batch 30  -timetovec 1 -softmax 0 -regularize 0 -beta_1 0.4 -beta_2 0.4
-
-#python main.py -data 2_d_hawkes -d_model 16 -d_type 16 -kernel_type 2  -epoch 50 -lr 0.0001 -batch 30  -timetovec 1 -softmax 0 -regularize 0 -beta_1 0.2 -beta_2 0.4
-##python main.py -data 2_d_hawkes -d_model 32 -d_type 32 -kernel_type 2  -epoch 50 -lr 0.0001 -batch 30  -timetovec 1 -softmax 0 -regularize 0 -beta_1 0.4 -beta_2 0.5
-
-python main.py -data 2_d_hawkes -d_model 24 -d_type 24 -kernel_type 2  -epoch 50 -lr 0.0001 -batch 30  -timetovec 0 -softmax 0 -regularize 0 -beta_1 0.4 -beta_2 0.4
+python main.py -data 2_d_hawkes -d_model 30 -d_type 30 -kernel_type 2  -epoch 50 -lr 0.00005 -batch 30  -timetovec 0 -softmax 0 -regularize 0 -beta_1 0.4 -beta_2 0.4
 #python main.py -data 2_d_hawkes -d_model 32 -d_type 32 -kernel_type 2  -epoch 25 -lr 0.0001 -batch 30  -timetovec 1 -softmax 0 -regularize 0 -beta_1 0.35 -beta_2 0.4
 
 #python main.py -data 2_d_hawkes -d_model 32 -d_type 32 -kernel_type 2  -epoch 50 -lr 0.0001 -batch 30  -timetovec 1 -softmax 0 -regularize 0 -beta_1 0.4 -beta_2 0.6
