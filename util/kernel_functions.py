@@ -580,7 +580,7 @@ class magic_kernel_2(nn.Module):
         else:
             if not non_event_intensity:
                 lengthscale = self.lengthscale(combined_embeddings).squeeze(-1)
-                sigma = self.sigma(combined_embeddings).squeeze(-1)
+                sigma = self.sigma(combined_embeddings).squeeze(-1)+5
                 alpha = self.alpha(combined_embeddings).squeeze(-1)
                 # l =  self.l(combined_embeddings).squeeze(-1)
                 # s =  self.s(combined_embeddings).squeeze(-1)
