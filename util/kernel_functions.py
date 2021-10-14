@@ -610,8 +610,8 @@ class magic_kernel_2(nn.Module):
 
         alpha = 1
 
-        # k2 =  (1 + (d ** 2) / (alpha * lengthscale ** 2)) ** (-alpha)
-        k2 = torch.exp(-(d) / lengthscale)
+        k2 =  (1 + (d ** 2) / (alpha * lengthscale ** 2)) ** (-alpha)
+        # k2 = torch.exp(-(d) / lengthscale)
         scores = (sigma)*(k1)*(k2)
         # self.scores = sigma*(alpha/lengthscale)*torch.exp(-d/lengthscale)*(1+torch.exp(-d/lengthscale))**(-1-alpha)
 
