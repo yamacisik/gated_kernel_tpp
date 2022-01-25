@@ -17,22 +17,20 @@ class gated_tpp(nn.Module):
                  kernel_type='squared_exponential', s=1.0, l=1.0, p=1.0,regulizing_param=5,betas = [0.4,0.3,1.0],
                  alpha=1.0, softmax=False, embed_time=False, timetovec=False,sigma = 1.0):
         super().__init__()
-
         self.d_model = d_model
         self.d_type = d_type
         self.num_types = num_types
         self.encoder = Encoder(num_types, d_model, d_type, length_scale=length_scale,
                                kernel_type=kernel_type, alpha=alpha, test_softmax=softmax, embed_time=embed_time,
                                timetovec=timetovec, s=s, l=l, p=p,sigma= sigma,regulizing_param=regulizing_param,betas = betas)
-        self.norm = nn.LayerNorm(d_model+d_type, eps=1e-6)
-        self.decoder = Decoder(num_types, d_model+d_type, dropout)
+        self.norm = nn.LayerNorm(d_model*2, eps=1e-6)
+        self.decoder = Decoder(num_types, d_model*2, dropout)
 
     def forward(self, event_type, event_time, arrival_times):
         scores, embeddings, _ = self.encoder(event_type, event_time, arrival_times)
         hidden = torch.matmul(scores, embeddings)
         # hidden = scores.sum(-1).unsqueeze(-1)
         # hidden = torch.matmul(scores, event_time)
-
         hidden = self.norm(hidden)
 
         return self.decoder(hidden, embeddings)
@@ -145,7 +143,7 @@ class gated_tpp(nn.Module):
             f_score = f1_score(all_actual_type, all_predicted_type, average='micro')
 
             print(f'Micro F-1:{f_score}')
-        return epoch_loss, events, all_RMSE, last_RMSE,last_event_accuracy
+        return epoch_loss, events, f_score, last_RMSE,last_event_accuracy
 
 
 class Encoder(nn.Module):

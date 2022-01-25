@@ -143,7 +143,7 @@ model = model.to(device)
 for p in model.parameters():
     if p.dim() > 1:
         nn.init.xavier_uniform_(p)
-
+print(count_parameters(model))
 if params.timetovec:
     stated_dict = torch.load('trained_embeddings/timetovec' +str(params.d_model)+  '.pt')
     model.encoder.embedding.load_state_dict(stated_dict)
@@ -176,13 +176,13 @@ for epoch in range(params.epoch):
     # print(f'Epoch:{epoch}, Train Loss:{train_loss:.6f}, Valid Loss:{train_loss:.6f}, Test Loss:{train_loss:.6f},Time per Epoch :{average_time:.6f}')
 
 
-valid_epoch_loss, _, val_RMSE, val_all_RMSE,val_accuracy = model.validate_epoch(valloader, device = params.device,regularize=params.regularize)
-test_epoch_loss, _, test_RMSE, test_all_RMSE,test_accuracy = model.validate_epoch(testloader, device = params.device,regularize=params.regularize)
+valid_epoch_loss, _, val_f1_score, val_last_rmse,val_accuracy = model.validate_epoch(valloader, device = params.device,regularize=params.regularize)
+test_epoch_loss, _, test_f1_score, test_last_RMSE,test_accuracy = model.validate_epoch(testloader, device = params.device,regularize=params.regularize)
 valid_loss = valid_epoch_loss / valid_events
 test_loss = test_epoch_loss / test_events
-print(f' Valid Last Event RMSE:{val_RMSE:.4f}, Test Last Event RMSE:{test_RMSE:.4f},')
-print(f' Valid Event Accuracy:{val_accuracy}, Test Event Accuracy:{test_accuracy} \n')
 
+print(f' Valid Last Event RMSE:{val_last_rmse:.4f}, Test Last Event RMSE:{test_last_RMSE:.4f},')
+print(f' Valid Event F-1:{val_f1_score}, Test Event F-1:{test_f1_score} \n')
 
 num_types = DATASET_EVENT_TYPES[params.data]
 kernel = model.encoder.kernel
@@ -226,9 +226,9 @@ params_to_record = lengthscales +sigmas +alphas+kernel.betas
 params_to_record = [str(model_name)] +params_to_record
 results_to_record = [str(params.data), str(params.epoch), str(params.batch_size), str(params.d_model),
                      str(params.d_type), str(params.lr), str(train_loss), str(valid_loss),
-                     str(test_loss),str(val_all_RMSE.item()),
-                     str(test_all_RMSE.item()), str(val_RMSE.item()),
-                     str(test_RMSE.item()),str(val_accuracy),str(test_accuracy),str(params.softmax),
+                     str(test_loss),str(val_f1_score.item()),
+                     str(test_f1_score.item()), str(val_last_rmse.item()),
+                     str(test_last_RMSE.item()),str(val_accuracy),str(test_accuracy),str(params.softmax),
                      str(params.timetovec),str(model_name)]
 
 with open(r'results.csv', 'a', newline='') as f:

@@ -620,3 +620,57 @@ class magic_kernel_2(nn.Module):
     def regularizer_loss(self):
 
         return self.lengthscale + self.sigma
+
+
+class mlp_kernel(nn.Module):
+
+    def __init__(self,
+                 num_types=1, d_type=1, sigma=1, p=1, alpha=1, regulizing_param=5.0, betas=[0.4, 0.3, 1]):
+        super().__init__()
+
+        self.d_type = d_type
+        self.num_types = num_types
+        self.norm = p
+        self.param_loss = 0
+        self.scores = None
+        self.sigma = sigma
+        self.alpha = alpha
+        self.regulizing_param = regulizing_param
+        self.betas = betas
+        self.layers = 4
+        """
+        If the model is 1-D we still need the type embedding as an input and train a linear layer followed by softplus
+        to make sure the length_scale parameter is positive. Adding a parameter followed by a sigmoid creates a non leaf
+        tensor and there for doesn't work.
+        """
+
+        if num_types == 1:
+
+            self.kernel_layers = nn.ModuleList([nn.Sequential(nn.Linear(1, d_type, bias=True),nn.ReLU(),nn.Linear(d_type , 1, bias=True)) for i in range(self.layers)])
+
+
+        else:
+            self.kernel_layer = nn.Sequential(nn.Linear(d_type * 2, d_type, bias=False), nn.ReLU(),nn.Linear(d_type , 1, bias=False))
+
+
+            # self.lengthscale = nn.Sequential(nn.Linear(d_type * 2, d_type, bias=False),nn.ReLU(),nn.Linear(d_type , 1, bias=False), nn.Sigmoid())
+            # self.alpha = nn.Sequential(nn.Linear(d_type * 2, d_type, bias=False),nn.ReLU(),nn.Linear(d_type , 1, bias=False), nn.Sigmoid())
+            # self.sigma = nn.Sequential(nn.Linear(d_type * 2, d_type, bias=False),nn.ReLU(),nn.Linear(d_type , 1, bias=False), nn.Sigmoid())
+            # self.base_intensity = nn.Sequential(nn.Linear(d_type, 1, bias=False), nn.Sigmoid())
+
+
+
+    def forward(self, time_diff, combined_embeddings=None,non_event_intensity = False):
+
+        d = time_diff.unsqueeze(-1)
+        if self.num_types == 1:
+            scores= torch.ones(d.size()).to(d.device)
+            for kernel_layer in self.kernel_layers:
+                scores = scores* kernel_layer(d)
+            scores = scores.squeeze(-1)
+            # scores = self.kernel_layer(d)
+
+        else:
+            pass
+        return scores
+
