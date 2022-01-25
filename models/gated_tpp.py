@@ -97,10 +97,10 @@ class gated_tpp(nn.Module):
                 predicted_times,probs = self(event_type, event_time, arrival_time)
                 # predicted_times = torch.ones(arrival_time.size()).to(arrival_time.device)
 
-                batch_loss,nll_loss,param_loss = self.calculate_loss(arrival_time, predicted_times, event_type, probs,event_time,regularize = regularize)
+                batch_loss,param_loss = self.calculate_loss(arrival_time, predicted_times, event_type, probs,event_time)
 
 
-                batch_loss = batch_loss + nll_loss+param_loss
+                batch_loss = batch_loss +param_loss
                 epoch_loss += batch_loss
                 events += ((event_type != 0).sum(-1) - 1).sum()
 
