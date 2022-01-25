@@ -195,7 +195,7 @@ if num_types>1:
     # alphas= kernel.parameter_layer(combined_embeddings)[:, :, :, 2].squeeze(-1).cpu().detach().numpy().flatten().tolist()
 
     lengthscales = kernel.lengthscale(combined_embeddings).cpu().detach().numpy().flatten().tolist()
-    alphas = kernel.alpha(combined_embeddings).cpu().detach().numpy().flatten().tolist()
+    ss = kernel.s(combined_embeddings).cpu().detach().numpy().flatten().tolist()
     # ls = kernel.l(combined_embeddings).cpu().detach().numpy().flatten().tolist()
     # ss = kernel.s(combined_embeddings).cpu().detach().numpy().flatten().tolist()
     sigmas = kernel.sigma(combined_embeddings).cpu().detach().numpy().flatten().tolist()
@@ -208,7 +208,7 @@ if num_types>1:
 
 else:
     lengthscales= [F.softplus(kernel.lengthscale,beta = kernel.betas[0]).item() for i in range(num_types**2)]
-    alphas = [F.softplus(kernel.alpha,beta = kernel.betas[1]).item() for i in range(num_types**2)]
+    ss = [F.softplus(kernel.s,beta = kernel.betas[1]).item() for i in range(num_types**2)]
     # base_intensities = [F.softplus(kernel.base_intensity, beta=kernel.betas[2]).item() for i in range(num_types)]
     base_intensities = [1]*(num_types**2)
 
@@ -216,7 +216,7 @@ else:
 
 model_name =secrets.token_hex(5)
 
-params_to_record = lengthscales +sigmas +alphas+kernel.betas
+params_to_record = lengthscales +sigmas +ss+kernel.betas
 
 # params_to_record = ls +sigmas +lengthscales+ss +kernel.betas
 
