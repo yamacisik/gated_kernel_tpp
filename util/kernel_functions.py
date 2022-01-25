@@ -468,9 +468,9 @@ class magic_kernel_2(nn.Module):
             self.param_loss += -torch.abs(self.lengthscale(combined_embeddings)).mean()*1
             self.param_loss += torch.abs(self.sigma[0](combined_embeddings)).mean() * 2
 
-        k1 = (1 + torch.exp(-d))**(-s)
+        k1 = (1 + torch.exp(-d))**(-s)  ## Took out 2
         alpha = 1
-        k2 =  (1 + (d ** 2) / (2*alpha * lengthscale ** 2)) ** (-alpha)
+        k2 =  (1 + (d ** 2) / (2*alpha * lengthscale ** 2)) ** (-alpha) ## Added 2
         # k2 =  (1 + (d) / (alpha * lengthscale ** 2)) ** (-alpha)
 
         scores = (sigma)*(k1)*(k2)
