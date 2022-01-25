@@ -47,6 +47,7 @@
 
 #python main.py -data 2_d_hawkes -d_model 64 -d_type 64 -kernel_type 2  -epoch 50 -lr 0.00005 -batch 30  -timetovec 0 -softmax 0 -regularize 0
 
+python main.py -data 2_d_hawkes -d_model 32 -d_type 32 -kernel_type 2  -epoch 2 -lr 0.001 -batch 30  -timetovec 0 -softmax 0
 
 
 

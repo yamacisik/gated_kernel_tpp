@@ -82,7 +82,7 @@ class gated_tpp(nn.Module):
             optimizer.step()
         return epoch_loss, events
 
-    def validate_epoch(self, dataloader, device='cpu', reg_param=0,regularize = False):
+    def validate_epoch(self, dataloader, device='cpu'):
 
         epoch_loss = 0
         events = 0
