@@ -35,7 +35,7 @@ class gated_tpp(nn.Module):
 
         return self.decoder(hidden, embeddings)
 
-    def calculate_loss(self, batch_arrival_times, sampled_arrival_times, batch_types,batch_probs,event_time,regularize = False):
+    def calculate_loss(self, batch_arrival_times, sampled_arrival_times, batch_types,batch_probs,event_time):
         arrival_times = batch_arrival_times[:, 1:]
         sampled_times = sampled_arrival_times[:, :-1]
         ## Check the loss
@@ -56,20 +56,7 @@ class gated_tpp(nn.Module):
         mark_loss = cross_entropy_loss.sum()
         param_loss = self.encoder.kernel.param_loss
 
-        nll_loss = 0
-        if regularize:
-        ## NLL Loss:
-            device = batch_arrival_times.device
-            embeddings = self.encoder.type_emb(batch_types)
-            sample_intensities = kernel_functions.get_sample_intensities(self.encoder.kernel,event_time, batch_arrival_times, batch_types,
-                                                                         device=device, embeddings=embeddings)
-            sample_intensities[sample_intensities == 0] = 1
-            sample_intensities = sample_intensities.log().sum(-1)
-            non_event_intensities = kernel_functions.get_non_event_intensities(self.encoder.kernel,  event_time, batch_arrival_times,
-                                                                               batch_types,
-                                  type_embeddings=self.encoder.type_emb, device=device,mc_sample_size = 5)
-            nll_loss = -(sample_intensities-non_event_intensities).sum()
-        return time_loss+mark_loss,nll_loss,param_loss
+        return time_loss+mark_loss,param_loss
 
     def train_epoch(self, dataloader, optimizer, params):
 
@@ -81,8 +68,8 @@ class gated_tpp(nn.Module):
             event_time, arrival_time, event_type, _ = map(lambda x: x.to(params.device), batch)
             predicted_times,probs = self(event_type, event_time, arrival_time)
 
-            batch_loss,nll_loss,param_loss= self.calculate_loss(arrival_time, predicted_times, event_type,probs,event_time,regularize = params.regularize)
-            batch_loss = batch_loss+nll_loss+param_loss
+            batch_loss,param_loss= self.calculate_loss(arrival_time, predicted_times, event_type,probs,event_time)
+            batch_loss = batch_loss+param_loss
 
             epoch_loss += batch_loss.item()
             events += ((event_type != 0).sum(-1) - 1).sum()

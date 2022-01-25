@@ -61,7 +61,6 @@ parser.add_argument('-normalize', type=int, default=0)
 parser.add_argument('-embed_time', type=int, default=0)
 parser.add_argument('-timetovec', type=int, default=0)
 parser.add_argument('-softmax', type=int, default=0)
-parser.add_argument('-regularize', type=int, default=0)
 
 params = parser.parse_args()
 
@@ -69,7 +68,6 @@ params.timetovec = True if params.timetovec == 1 else False
 params.normalize = True if params.normalize == 1 else False
 params.embed_time = True if params.embed_time == 1 else False
 params.softmax = True if params.softmax == 1 else False
-params.regularize = True if params.regularize == 1 else False
 
 
 
