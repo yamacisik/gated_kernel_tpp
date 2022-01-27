@@ -36,12 +36,10 @@ parser.add_argument('-lr', type=float, default=0.001)
 parser.add_argument('-l2', type=float, default=0.0000)
 parser.add_argument('-save', type=bool, default=True)
 parser.add_argument('-normalize', type=int, default=0)
-parser.add_argument('-softmax', type=int, default=0)
 
 params = parser.parse_args()
 
 params.normalize = True if params.normalize == 1 else False
-params.softmax = True if params.softmax == 1 else False
 
 # use_cuda = torch.cuda.is_available()
 if torch.cuda.is_available():
