@@ -79,7 +79,7 @@ class gated_tpp(nn.Module):
             for batch in dataloader:
 
                 event_time, arrival_time, event_type, _ = map(lambda x: x.to(device), batch)
-                predicted_times, probs = self(event_type, event_time, arrival_time)
+                predicted_times, probs = self(event_type, event_time)
                 batch_loss = self.calculate_loss(arrival_time, predicted_times, event_type, probs)
 
                 epoch_loss += batch_loss
