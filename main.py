@@ -16,8 +16,6 @@ DATASET_PATHS = {'sin_hawkes': '../data/simulated/sin_hawkes/', 'power_hawkes': 
 DATASET_EVENT_TYPES = {'sin_hawkes': 1, 'power_hawkes': 1,'poisson':1, '2_d_hawkes': 2, 'mimic': 75, 'stackOverflow': 22,
                        'retweet': 3,'exp_hawkes':1,'sin_hawkes_2':1}
 
-KERNEL_TYPES = {1: 'squared_exponential', 2: 'rational_quadratic'}
-MODELS = {1: 'gated_TPP', 2: 'LogNormMix'}
 
 
 parser = argparse.ArgumentParser()
@@ -27,7 +25,6 @@ parser.add_argument('-model', type=int, default=1)
 parser.add_argument('-epoch', type=int, default=50)
 parser.add_argument('-batch_size', type=int, default=20)
 parser.add_argument('-d_model', type=int, default=32)
-parser.add_argument('-kernel_type', type=int, default=1)
 parser.add_argument('-p_norm', type=float, default=1)
 parser.add_argument('-sigma', type=float, default=1)
 
@@ -38,10 +35,8 @@ parser.add_argument('-save', type=bool, default=True)
 parser.add_argument('-normalize', type=int, default=0)
 
 params = parser.parse_args()
-
 params.normalize = True if params.normalize == 1 else False
 
-# use_cuda = torch.cuda.is_available()
 if torch.cuda.is_available():
     device = 'cuda'
 else:
@@ -67,7 +62,6 @@ with open(data_path + 'test.pkl', 'rb') as f:
 
 t_max = max([seq[-1]['time_since_start'] for data in [train_data, dev_data, test_data] for seq in data])
 if not params.normalize:
-    'Arrival Times are not normalized...'
     t_max = 1
 
 trainloader = get_dataloader(train_data, params.batch_size, shuffle=True,t_max = t_max)
