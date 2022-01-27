@@ -11,7 +11,7 @@ from gated_tpp import gated_tpp,count_parameters
 DATASET_PATHS = {'sin_hawkes': '../data/simulated/sin_hawkes/', 'power_hawkes': '../data/simulated/power_hawkes/',
                 'poisson': '../data/simulated/poisson/','exp_hawkes':'../data/simulated/exp_hawkes/','sin_hawkes_2':'../data/simulated/sin_hawkes_2/',
                  '2_d_hawkes': '../data/simulated/2_d_hawkes/', 'mimic': '../data/mimic/',
-                 'stackOverflow': '../data/stackOverflow/', 'retweet': '../data/retweet/'}
+                 'stackOverflow': '../data/stackoverflow/', 'retweet': '../data/retweet/'}
 
 DATASET_EVENT_TYPES = {'sin_hawkes': 1, 'power_hawkes': 1,'poisson':1, '2_d_hawkes': 2, 'mimic': 75, 'stackOverflow': 22,
                        'retweet': 3,'exp_hawkes':1,'sin_hawkes_2':1}
