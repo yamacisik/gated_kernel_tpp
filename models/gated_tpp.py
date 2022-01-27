@@ -29,28 +29,24 @@ class gated_tpp(nn.Module):
     def forward(self, event_type, event_time, arrival_times):
         scores, embeddings, _ = self.encoder(event_type, event_time, arrival_times)
         hidden = torch.matmul(scores, embeddings)
-        # hidden = scores.sum(-1).unsqueeze(-1)
-        # hidden = torch.matmul(scores, event_time)
         hidden = self.norm(hidden)
-
         return self.decoder(hidden, embeddings)
 
-    def calculate_loss(self, batch_arrival_times, sampled_arrival_times, batch_types,batch_probs,event_time):
+    def calculate_loss(self, batch_arrival_times, sampled_arrival_times, batch_types,batch_probs):
+
+        ## Shif the times because we are predicting for the next event.
         arrival_times = batch_arrival_times[:, 1:]
         sampled_times = sampled_arrival_times[:, :-1]
-        ## Check the loss
 
+        ## l-1 loss
         loss = torch.abs(arrival_times - sampled_times)
-        # loss = (arrival_times - sampled_times)
-        seq_length_mask = (batch_types[:,1:] != 0)*1
+        seq_length_mask = (batch_types[:, 1:] != 0)*1
         batch_loss = loss*seq_length_mask
         time_loss = batch_loss.sum()
 
         non_event_mask_prob = torch.ones((batch_probs.size(0),batch_probs.size(1),1)).to(batch_arrival_times.device)
         probs = torch.cat([non_event_mask_prob,batch_probs],dim = -1)
         one_hot_encodings = one_hot_embedding(batch_types[:, 1:],self.num_types+1)
-
-        # print(one_hot_encodings*torch.log(probs[:,:-1,:]))
         cross_entropy_loss =-(one_hot_encodings*torch.log(probs[:,:-1,:])).sum(-1)
         cross_entropy_loss = cross_entropy_loss * seq_length_mask
         mark_loss = cross_entropy_loss.sum()
@@ -68,10 +64,11 @@ class gated_tpp(nn.Module):
             event_time, arrival_time, event_type, _ = map(lambda x: x.to(params.device), batch)
             predicted_times,probs = self(event_type, event_time, arrival_time)
 
-            batch_loss,param_loss= self.calculate_loss(arrival_time, predicted_times, event_type,probs,event_time)
+            batch_loss,param_loss= self.calculate_loss(arrival_time, predicted_times, event_type,probs)
             batch_loss = batch_loss+param_loss
 
             epoch_loss += batch_loss.item()
+            events += ((event_type != 0).sum(-1) - 1).sum()
             events += ((event_type != 0).sum(-1) - 1).sum()
             # nll_loss.backward()
             # optimizer.zero_grad()
@@ -97,7 +94,7 @@ class gated_tpp(nn.Module):
                 predicted_times,probs = self(event_type, event_time, arrival_time)
                 # predicted_times = torch.ones(arrival_time.size()).to(arrival_time.device)
 
-                batch_loss,param_loss = self.calculate_loss(arrival_time, predicted_times, event_type, probs,event_time)
+                batch_loss,param_loss = self.calculate_loss(arrival_time, predicted_times, event_type, probs)
 
 
                 batch_loss = batch_loss +param_loss
@@ -163,10 +160,6 @@ class Encoder(nn.Module):
 
         temp_enc = self.embedding(event_type, event_time)
 
-        # temp_enc = self.embedding(event_type, torch.cat([torch.zeros(event_time.size()[0], 1).to(event_time.device), event_time], dim=-1))
-        # temp_enc =  (temp_enc[:, 1:, :] - temp_enc[:, :-1, :])
-        # temp_enc = self.embedding(event_type) * math.sqrt(self.d_model)
-
         ## Type Encoding
         type_embedding = self.type_emb(event_type)
         xd_bar, xd = get_pairwise_type_embeddings(type_embedding)
@@ -175,7 +168,6 @@ class Encoder(nn.Module):
 
         xt_bar, xt = get_pairwise_times(event_time)
         t_diff = torch.abs(xt_bar - xt)
-        ## Scale the embedding with the hidden vector size
         if self.num_types ==1:
             hidden_vector = temp_enc
         else:
@@ -184,7 +176,6 @@ class Encoder(nn.Module):
         ## Future Masking
         subsequent_mask = get_subsequent_mask(event_type)
 
-        # scores = self.kernel((xt, xt_bar), (xd, xd_bar)) * (self.sigmoid((xt, xt_bar), (xd, xd_bar)))
         scores = self.kernel(t_diff,combined_embeddings)
         if self.softmax:
             scores = scores.masked_fill_(subsequent_mask == 0, value=-1e7)
@@ -192,8 +183,6 @@ class Encoder(nn.Module):
 
         else:
             scores = scores.masked_fill_(subsequent_mask == 0, value=0)  ### BUGGGG ?????
-
-        self.scores = scores
 
         return scores, hidden_vector, t_diff
 

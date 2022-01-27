@@ -425,7 +425,7 @@ class magic_kernel_2(nn.Module):
 
             self.lengthscale = torch.nn.Parameter(torch.randn(1))
             self.sigma = torch.nn.Parameter(torch.randn(1))
-            self.l = torch.nn.Parameter(torch.randn(1))
+            self.alpha = torch.nn.Parameter(torch.randn(1))
             self.s = torch.nn.Parameter(torch.randn(1))
 
 
@@ -434,30 +434,16 @@ class magic_kernel_2(nn.Module):
             self.lengthscale = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Softplus(self.betas[0]))
             self.sigma = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Softplus(self.betas[2]))
             self.s = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Softplus(self.betas[1]))
-            # self.s = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Sigmoid())
-            # self.base_intensity = nn.Sequential(nn.Linear(d_type, 1, bias=False), nn.Softplus(self.betas[2]))
+            self.alpha = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Softplus())
 
-
-            # self.lengthscale = nn.Sequential(nn.Linear(d_type * 2, d_type, bias=False),nn.ReLU(),nn.Linear(d_type , 1, bias=False), nn.Sigmoid())
-            # self.alpha = nn.Sequential(nn.Linear(d_type * 2, d_type, bias=False),nn.ReLU(),nn.Linear(d_type , 1, bias=False), nn.Sigmoid())
-            # self.sigma = nn.Sequential(nn.Linear(d_type * 2, d_type, bias=False),nn.ReLU(),nn.Linear(d_type , 1, bias=False), nn.Sigmoid())
-            # self.base_intensity = nn.Sequential(nn.Linear(d_type, 1, bias=False), nn.Sigmoid())
-
-            #
-            # self.parameter_layer = nn.Sequential(nn.Linear(d_type * 2, 3, bias=False), nn.Sigmoid())
-
-
-            # self.base_intensity = nn.Sequential(nn.Linear(d_type, 1, bias=False), nn.Sigmoid())
-
-
-    def forward(self, time_diff, combined_embeddings=None,non_event_intensity = False):
+    def forward(self, time_diff, combined_embeddings=None):
 
         d = time_diff
 
         if self.num_types == 1:
-            lengthscale = F.softplus(self.lengthscale,self.betas[0])
-            sigma = torch.sigmoid(self.sigma)
-            s = F.softplus(self.s,self.betas[1])
+            lengthscale = F.softplus(self.lengthscale,beta = 0.4)
+            sigma = F.softplus(self.sigma,beta = 1)
+            s = F.softplus(self.s,beta = 0.3)
 
         else:
             lengthscale = self.lengthscale(combined_embeddings).squeeze(-1)
