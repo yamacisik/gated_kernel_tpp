@@ -11,11 +11,11 @@ sys.path.append('util')
 
 class gated_tpp(nn.Module):
 
-    def __init__(self, num_types, d_model, dropout=0.1):
+    def __init__(self, num_types, d_model, dropout=0.1,betas = [10,10,10,1,10] ):
         super().__init__()
         self.d_model = d_model
         self.num_types = num_types
-        self.encoder = Encoder(num_types, d_model)
+        self.encoder = Encoder(num_types, d_model,betas = betas)
         self.norm = nn.LayerNorm(d_model * 2, eps=1e-6)
         self.decoder = Decoder(num_types, d_model * 2, dropout)
 
@@ -120,7 +120,7 @@ class Encoder(nn.Module):
     """ A encoder model with self attention mechanism. """
 
     def __init__(self,
-                 num_types, d_model):
+                 num_types, d_model,betas = [10,10,10,1,10]):
         super().__init__()
 
         self.d_model = d_model
@@ -129,7 +129,7 @@ class Encoder(nn.Module):
         self.embedding = BiasedPositionalEmbedding(d_model, max_len=4096)
         self.type_emb = nn.Embedding(num_types + 1, d_model, padding_idx=0)
         self.type_emb_prediction = nn.Embedding(num_types + 1, d_model, padding_idx=0)
-        self.kernel = kernel_functions.sigmoid_gated_kernel(num_types, d_model)
+        self.kernel = kernel_functions.sigmoid_gated_kernel(num_types, d_model,betas = betas)
 
     def forward(self, event_type, event_time):
 
