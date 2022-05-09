@@ -7,12 +7,12 @@ import math
 class sigmoid_gated_kernel(nn.Module):
 
     def __init__(self,
-                 num_types=1, d_type=1):
+                 num_types=1, d_type=1,betas = [10,10,10,1,10]):
         super().__init__()
 
         self.d_type = d_type
         self.num_types = num_types
-
+        self.betas = betas
         if num_types == 1:
 
             self.lengthscale = torch.nn.Parameter(torch.randn(1))
@@ -22,11 +22,11 @@ class sigmoid_gated_kernel(nn.Module):
             self.p = torch.nn.Parameter(torch.randn(1))
 
         else:
-            self.lengthscale = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Softplus(beta=10))
-            self.sigma = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Softplus(beta=10))
-            self.s = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Softplus(beta=10))
-            self.alpha = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Softplus(beta=1))
-            self.p = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Softplus(beta=10))
+            self.lengthscale = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Softplus(beta=self.betas[0]))
+            self.sigma = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Softplus(beta=self.betas[1]))
+            self.s = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Softplus(beta=self.betas[2]))
+            self.alpha = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Softplus(beta=self.betas[3]))
+            self.p = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Softplus(beta=self.betas[4]))
 
     def forward(self, time_diff, combined_embeddings=None):
 

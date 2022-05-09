@@ -7,6 +7,9 @@ import torch.optim as optim
 import secrets
 from dataset import get_dataloader
 from gated_tpp import gated_tpp,count_parameters
+from util.kernel_functions import get_pairwise_type_embeddings
+import csv
+
 
 DATASET_PATHS = {'sin_hawkes': '../data/simulated/sin_hawkes/', 'power_hawkes': '../data/simulated/power_hawkes/',
                 'poisson': '../data/simulated/poisson/','exp_hawkes':'../data/simulated/exp_hawkes/','sin_hawkes_2':'../data/simulated/sin_hawkes_2/',
@@ -27,6 +30,13 @@ parser.add_argument('-batch_size', type=int, default=20)
 parser.add_argument('-d_model', type=int, default=32)
 parser.add_argument('-p_norm', type=float, default=1)
 parser.add_argument('-sigma', type=float, default=1)
+parser.add_argument('-b1', type=float, default=1)
+parser.add_argument('-b2', type=float, default=1)
+parser.add_argument('-b3', type=float, default=1)
+parser.add_argument('-b4', type=float, default=1)
+parser.add_argument('-b5', type=float, default=1)
+
+
 
 parser.add_argument('-dropout', type=float, default=0.1)
 parser.add_argument('-lr', type=float, default=0.001)
@@ -77,7 +87,7 @@ for seq in trainloader.dataset.event_type:
 for seq in testloader.dataset.event_type:
     test_events  += len(seq)
 
-model = gated_tpp(num_types, params.d_model,dropout=params.dropout)
+model = gated_tpp(num_types, params.d_model,dropout=params.dropout,betas = [params.b1,params.b2,params.b3,params.b4,params.b5])
 
 optimizer = optim.Adam(filter(lambda x: x.requires_grad, model.parameters()),
                        params.lr, betas=(0.9, 0.999), eps=1e-05, weight_decay=params.l2)
@@ -111,6 +121,29 @@ valid_epoch_loss, _, val_f1_score, val_last_rmse, val_accuracy = model.validate_
 
 print(f' Test Last Event RMSE:{test_last_RMSE:.4f}, Test Last Event F-1 Score:{test_f1_score:.4f},')
 
+## Get Parameters
+events = torch.tensor([range(1,num_types+1)]).to(params.device)
+embeddings = model.encoder.type_emb(events)
+print(embeddings.shape)
+xd_bar, xd = get_pairwise_type_embeddings(embeddings)
+combined_embeddings = torch.cat([xd_bar, xd], dim=-1)
+kernel= model.encoder.kernel
+lengthscales = kernel.lengthscale(combined_embeddings).cpu().detach().numpy().flatten().tolist()
+ss = kernel.s(combined_embeddings).cpu().detach().numpy().flatten().tolist()
+sigmas = kernel.sigma(combined_embeddings).cpu().detach().numpy().flatten().tolist()
+alphas = kernel.alpha(combined_embeddings).cpu().detach().numpy().flatten().tolist()
+ps = kernel.p(combined_embeddings).cpu().detach().numpy().flatten().tolist()
+
+
+model_name =secrets.token_hex(5)
+
+params_to_record = lengthscales +sigmas +ss+alphas +ps+ kernel.betas
+print(len(params_to_record))
+params_to_record = [str(model_name)] +params_to_record
+with open(r'learned_params_3.csv', 'a', newline='') as f:
+    writer = csv.writer(f)
+    writer.writerow(params_to_record)
+## Get Parameters
 
 model_name =secrets.token_hex(5)
 if params.save:
