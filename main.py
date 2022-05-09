@@ -145,7 +145,6 @@ with open(r'learned_params_3.csv', 'a', newline='') as f:
     writer.writerow(params_to_record)
 ## Get Parameters
 
-model_name =secrets.token_hex(5)
 if params.save:
     torch.save(model.state_dict(), 'trained_models/' + model_name + '.pt')
 print(f'Saved Model Name:{model_name}')
