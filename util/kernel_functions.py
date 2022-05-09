@@ -451,7 +451,7 @@ class magic_kernel_2(nn.Module):
             s = self.s(combined_embeddings).squeeze(-1)
 
             self.param_loss= 0
-            self.param_loss += -torch.abs(self.lengthscale(combined_embeddings)).mean()*1
+            self.param_loss += -torch.abs(self.lengthscale(combined_embeddings)).mean()*2
             self.param_loss += torch.abs(self.sigma[0](combined_embeddings)).mean() * 2
 
         k1 = (1 + torch.exp(-d))**(-s)  ## Took out 2
