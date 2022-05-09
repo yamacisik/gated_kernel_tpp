@@ -60,6 +60,8 @@ class gated_tpp(nn.Module):
             batch_loss = self.calculate_loss(arrival_time, predicted_times, event_type, probs)
 
             epoch_loss += batch_loss.item()
+
+            batch_loss += self.encoder.kernel.regularizer_loss
             events += ((event_type != 0).sum(-1) - 1).sum()
             events += ((event_type != 0).sum(-1) - 1).sum()
             batch_loss.backward()

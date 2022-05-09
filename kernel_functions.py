@@ -22,11 +22,11 @@ class sigmoid_gated_kernel(nn.Module):
             self.p = torch.nn.Parameter(torch.randn(1))
 
         else:
-            self.lengthscale = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Softplus(beta=0.4))
-            self.sigma = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Softplus())
-            self.s = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Softplus(beta=0.3))
-            self.alpha = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Softplus())
-            self.p = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Softplus())
+            self.lengthscale = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Softplus(beta=10))
+            self.sigma = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Softplus(beta=10))
+            self.s = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Softplus(beta=10))
+            self.alpha = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Softplus(beta=1))
+            self.p = nn.Sequential(nn.Linear(d_type * 2, 1, bias=False), nn.Softplus(beta=10))
 
     def forward(self, time_diff, combined_embeddings=None):
 
@@ -50,5 +50,10 @@ class sigmoid_gated_kernel(nn.Module):
         k2 = (1 + (d ** 2) / (2 * alpha * lengthscale ** 2)) ** (-alpha)
         scores = (sigma) * (k1) * (k2)
 
-        return scores
+        self.regularizer_loss = 0
+        # self.regularizer_loss += torch.abs(self.p(combined_embeddings)).sum()
+        # self.regularizer_loss += -torch.abs(self.alpha(combined_embeddings)).sum()*0.00001
+        # self.regularizer_loss += torch.abs(self.s(combined_embeddings)).sum()*0.00001
 
+
+        return scores
