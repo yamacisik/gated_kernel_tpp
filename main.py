@@ -56,8 +56,8 @@ np.random.seed(params.seed)
 if torch.cuda.is_available():
     device = 'cuda'
     # torch.set_default_tensor_type(cuda_tensor)
-    torch.cuda.manual_seed(seed=params.seed)
-    torch.cuda.manual_seed_all(params.seed)
+    torch.cuda.manual_seed(seed=seed)
+    torch.cuda.manual_seed_all(seed)
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
 else:
