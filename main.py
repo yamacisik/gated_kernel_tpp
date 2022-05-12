@@ -9,6 +9,8 @@ from dataset import get_dataloader
 from gated_tpp import gated_tpp,count_parameters
 from util.kernel_functions import get_pairwise_type_embeddings
 import csv
+import numpy as np
+import random
 
 
 DATASET_PATHS = {'sin_hawkes': '../data/simulated/sin_hawkes/', 'power_hawkes': '../data/simulated/power_hawkes/',
@@ -46,6 +48,22 @@ parser.add_argument('-normalize', type=int, default=0)
 
 params = parser.parse_args()
 params.normalize = True if params.normalize == 1 else False
+
+seed = 42
+torch.manual_seed(params.seed)
+random.seed(params.seed)
+np.random.seed(params.seed)
+if torch.cuda.is_available():
+    device = 'cuda'
+    # torch.set_default_tensor_type(cuda_tensor)
+    torch.cuda.manual_seed(seed=params.seed)
+    torch.cuda.manual_seed_all(params.seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+else:
+    # torch.set_default_tensor_type(cpu_tensor)
+    device = 'cpu'
+
 
 if torch.cuda.is_available():
     device = 'cuda'
