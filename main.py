@@ -115,7 +115,7 @@ for epoch in range(params.epoch):
     print(f'Epoch:{epoch}, Train Loss:{train_loss:.6f}, Valid Loss:{train_loss:.6f}, Test Loss:{train_loss:.6f},Time per Epoch :{average_time:.6f}')
 
 test_epoch_loss, _, test_f1_score, test_last_RMSE, test_accuracy = model.validate_epoch(testloader,
-                                                                                        device=params.device)
+                                                                                        device=params.device,save = True)
 valid_epoch_loss, _, val_f1_score, val_last_rmse, val_accuracy = model.validate_epoch(valloader,
                                                                                       device=params.device )
 

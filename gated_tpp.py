@@ -7,7 +7,7 @@ from sklearn.metrics import f1_score
 import kernel_functions
 sys.path.append('util')
 sys.path.append('util')
-
+import numpy as np
 
 class gated_tpp(nn.Module):
 
@@ -55,7 +55,7 @@ class gated_tpp(nn.Module):
             optimizer.zero_grad()
 
             event_time, arrival_time, event_type, _ = map(lambda x: x.to(params.device), batch)
-            predicted_times, probs = self(event_type, event_time)
+            predicted_times, probs,stds = self(event_type, event_time)
 
             batch_loss = self.calculate_loss(arrival_time, predicted_times, event_type, probs)
 
@@ -68,10 +68,13 @@ class gated_tpp(nn.Module):
             optimizer.step()
         return epoch_loss, events
 
-    def validate_epoch(self, dataloader, device='cpu'):
+    def validate_epoch(self, dataloader, device='cpu',save = False):
 
         epoch_loss = 0
         events = 0
+        times = []
+        deviations = []
+        actual_times = []
         with torch.no_grad():
             last_errors = []
             all_errors = []
@@ -81,7 +84,7 @@ class gated_tpp(nn.Module):
             for batch in dataloader:
 
                 event_time, arrival_time, event_type, _ = map(lambda x: x.to(device), batch)
-                predicted_times, probs = self(event_type, event_time)
+                predicted_times, probs,stds = self(event_type, event_time)
                 batch_loss = self.calculate_loss(arrival_time, predicted_times, event_type, probs)
 
                 epoch_loss += batch_loss
@@ -89,6 +92,10 @@ class gated_tpp(nn.Module):
 
                 last_event_index = (event_type != 0).sum(-1) - 2
                 errors = predicted_times[:, :-1] - arrival_time[:, 1:]
+                ## Added for STD of predictions
+                times.append(predicted_times[:, :-1])
+                actual_times.append(arrival_time[:, 1:])
+                deviations.append(stds[:, :-1])
                 seq_index = 0
 
                 predicted_events = torch.argmax(probs, dim=-1) + 1  ## Events go from 1 to N in the dataset
@@ -113,6 +120,11 @@ class gated_tpp(nn.Module):
             last_f1_score = f1_score(last_actual_types, last_predicted_types, average='micro')
 
             print(f'Micro F-1:{last_f1_score}')
+
+            if save:
+                np.save('predicted_times',times)
+                np.save('predicted_times_std',deviations)
+                np.save('actual_times', actual_times)
         return epoch_loss, events, last_f1_score, last_RMSE, last_event_accuracy
 
 
@@ -205,7 +217,7 @@ class generative_network(nn.Module):
         mean = nn.functional.softplus(self.event_time_calculator(hidden)).squeeze(-1).mean(-1)
         std = nn.functional.softplus(self.event_time_calculator(hidden)).squeeze(-1).std(-1)
 
-        return mean, mark_probs
+        return mean, mark_probs,std
 
 def get_subsequent_mask(seq):
     """ For masking out the subsequent info, i.e., masked self-attention. """
