@@ -51,9 +51,9 @@ class sigmoid_gated_kernel(nn.Module):
         scores = (sigma) * (k1) * (k2)
 
         self.regularizer_loss = 0
-        self.regularizer_loss += torch.abs(self.p(combined_embeddings)).mean()
-        self.regularizer_loss += torch.abs(self.alpha(combined_embeddings)).mean()
-        self.regularizer_loss += torch.abs(self.s(combined_embeddings)).mean()
+        # self.regularizer_loss += torch.abs(self.p(combined_embeddings)).mean()
+        # self.regularizer_loss += torch.abs(self.alpha(combined_embeddings)).mean()
+        # self.regularizer_loss += torch.abs(self.s(combined_embeddings)).mean()
 
 
         return scores
