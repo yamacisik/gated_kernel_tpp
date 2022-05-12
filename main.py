@@ -50,9 +50,9 @@ params = parser.parse_args()
 params.normalize = True if params.normalize == 1 else False
 
 seed = 42
-torch.manual_seed(params.seed)
-random.seed(params.seed)
-np.random.seed(params.seed)
+torch.manual_seed(seed)
+random.seed(seed)
+np.random.seed(seed)
 if torch.cuda.is_available():
     device = 'cuda'
     # torch.set_default_tensor_type(cuda_tensor)
